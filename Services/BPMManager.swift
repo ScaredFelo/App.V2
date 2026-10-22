@@ -32,7 +32,7 @@ final class BPMManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
             }
             .store(in: &cancellables)
 
-        requestHealthKitAccess()
+        // La autorización de HealthKit se solicita desde App.swift al abrir la app
 
         // Inicialización tardía para asegurar permisos
         DispatchQueue.main.async { [weak self] in
@@ -42,7 +42,7 @@ final class BPMManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     }
 
     func requestHealthKitAccess() {
-        healthKitManager.requestAuthorization { [weak self] success in
+        healthKitManager.solicitarPermisoHealthKit { [weak self] success in
             DispatchQueue.main.async {
                 guard let self, self.currentBPM == 0 else { return }
                 self.statusText = success ? "HealthKit listo" : "Sin acceso a Salud"
