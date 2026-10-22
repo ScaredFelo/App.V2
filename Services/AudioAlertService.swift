@@ -9,15 +9,16 @@ public final class AudioAlertService {
 
     private var backgroundPlayer: AVAudioPlayer?
     private var alertPlayer: AVAudioPlayer?
+    private var restoreSessionTask: Task<Void, Never>?
 
     private init() {
-        configureAudioSession()
+        configureAudioSession(options: [.mixWithOthers])
     }
 
-    private func configureAudioSession() {
+    private func configureAudioSession(options: AVAudioSession.CategoryOptions) {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try session.setCategory(.playback, mode: .default, options: options)
             try session.setActive(true)
         } catch {
             print("Failed to setup audio session: \(error)")
@@ -25,7 +26,9 @@ public final class AudioAlertService {
     }
 
     public func startBackgroundAudio() {
-        configureAudioSession()
+        restoreSessionTask?.cancel()
+        restoreSessionTask = nil
+        configureAudioSession(options: [.mixWithOthers])
 
         if let player = backgroundPlayer {
             if !player.isPlaying {
@@ -52,24 +55,34 @@ public final class AudioAlertService {
     }
 
     public func playRestFinishedAlert() {
-        configureAudioSession()
+        restoreSessionTask?.cancel()
+        configureAudioSession(options: [.duckOthers])
 
+        var alertDuration = 1.8
         do {
-            let player = try AVAudioPlayer(data: Self.alertWAVData())
-            player.volume = 1
+            let player = try AVAudioPlayer(data: Self.boxingBellWAVData())
+            player.volume = 1.0
             player.prepareToPlay()
             alertPlayer = player
             player.play()
+            alertDuration = player.duration
         } catch {
             AudioServicesPlaySystemSound(1005)
         }
 
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
+
+        restoreSessionTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64((alertDuration + 0.25) * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            self?.configureAudioSession(options: [.mixWithOthers])
+            self?.restoreSessionTask = nil
+        }
     }
 
     public func playBpmTargetReachedAlert() {
-        configureAudioSession()
+        configureAudioSession(options: [.mixWithOthers])
         AudioServicesPlaySystemSound(1016)
 
         let generator = UIImpactFeedbackGenerator(style: .heavy)
@@ -81,28 +94,48 @@ public final class AudioAlertService {
         return wavData(sampleRate: sampleRate, samples: [Int16](repeating: 0, count: sampleCount))
     }
 
-    private static func alertWAVData(sampleRate: Int = 44100, duration: Double = 0.5) -> Data {
+    private static func boxingBellWAVData(sampleRate: Int = 44100, duration: Double = 1.8) -> Data {
         let sampleCount = Int(Double(sampleRate) * duration)
-        var samples = [Int16](repeating: 0, count: sampleCount)
+        var mix = [Double](repeating: 0, count: sampleCount)
 
-        let beeps: [(start: Double, end: Double, frequency: Double)] = [
-            (0.00, 0.16, 880.0),
-            (0.22, 0.42, 1174.66)
+        let partials: [(frequency: Double, amplitude: Double, decay: Double)] = [
+            (1046.50, 0.55, 4.2),
+            (1567.98, 0.34, 5.4),
+            (2093.00, 0.24, 6.5),
+            (2637.02, 0.16, 7.8),
+            (3135.96, 0.10, 9.0)
         ]
 
-        for beep in beeps {
-            let start = max(0, Int(beep.start * Double(sampleRate)))
-            let end = min(sampleCount, Int(beep.end * Double(sampleRate)))
-            guard start < end else { continue }
+        let strikes: [Double] = [0.0, 0.30, 0.60]
+        for strike in strikes {
+            let start = Int(strike * Double(sampleRate))
+            let strikeLength = min(sampleCount - start, Int(1.2 * Double(sampleRate)))
+            guard start >= 0, strikeLength > 0 else { continue }
 
-            let length = Double(end - start)
-            for index in start..<end {
-                let time = Double(index) / Double(sampleRate)
-                let progress = Double(index - start) / length
-                let envelope = sin(Double.pi * progress)
-                let value = sin(2 * Double.pi * beep.frequency * time) * envelope * 0.35
-                samples[index] = Int16(max(-1, min(1, value)) * Double(Int16.max))
+            for offset in 0..<strikeLength {
+                let time = Double(offset) / Double(sampleRate)
+                let attack = min(1.0, time / 0.003)
+                var value = 0.0
+
+                for partial in partials {
+                    value += sin(2 * Double.pi * partial.frequency * time)
+                        * partial.amplitude
+                        * exp(-partial.decay * time)
+                }
+
+                if time < 0.02 {
+                    value += (1.0 - time / 0.02) * 0.25 * sin(2 * Double.pi * 1800 * time)
+                }
+
+                mix[start + offset] += value * attack
             }
+        }
+
+        let peak = mix.reduce(0.0) { max($0, abs($1)) }
+        let scale = peak > 0 ? 0.92 / peak : 1.0
+        let samples = mix.map { value -> Int16 in
+            let normalized = max(-1.0, min(1.0, value * scale))
+            return Int16(normalized * Double(Int16.max))
         }
 
         return wavData(sampleRate: sampleRate, samples: samples)

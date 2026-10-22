@@ -9,6 +9,7 @@ public struct ExerciseListView: View {
     @State private var selectedEquipment: EquipmentType? = nil
     @State private var searchText = ""
     @State private var showingAddModal = false
+    @State private var exerciseToConfigure: Exercise?
 
     public var body: some View {
         NavigationStack {
@@ -33,7 +34,21 @@ public struct ExerciseListView: View {
             }
             .navigationTitle("Ejercicios")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Menu {
+                        ForEach(filteredExercises) { exercise in
+                            Button {
+                                exerciseToConfigure = exercise
+                            } label: {
+                                Label(exercise.name, systemImage: "gearshape")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                    }
+                    .disabled(filteredExercises.isEmpty)
+                    .accessibilityLabel("Ajustar ejercicio")
+
                     Button(action: { showingAddModal = true }) {
                         Image(systemName: "plus")
                             .font(.headline)
@@ -43,6 +58,9 @@ public struct ExerciseListView: View {
             }
             .sheet(isPresented: $showingAddModal) {
                 AddExerciseView()
+            }
+            .sheet(item: $exerciseToConfigure) { exercise in
+                ExerciseSettingsView(exercise: exercise)
             }
             .searchable(text: $searchText, prompt: "Buscar ejercicio...")
         }
@@ -143,6 +161,7 @@ public struct AddExerciseView: View {
     @State private var name = ""
     @State private var muscleGroup: MuscleGroup = .pecho
     @State private var equipmentType: EquipmentType = .mancuernas
+    @State private var weightType: WeightType = .mancuernas
     @State private var requiresStraps = false
     @State private var restSeconds = 90
     @State private var useBpmDrop = false
@@ -153,6 +172,11 @@ public struct AddExerciseView: View {
             Form {
                 Section("Detalles del Ejercicio") {
                     TextField("Nombre del ejercicio", text: $name)
+                    Picker("Tipo de peso", selection: $weightType) {
+                        ForEach(WeightType.allCases) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
                     Picker("Grupo Muscular", selection: $muscleGroup) {
                         ForEach(MuscleGroup.allCases) { group in
                             Text(group.rawValue).tag(group)
@@ -187,6 +211,7 @@ public struct AddExerciseView: View {
                             name: name,
                             muscleGroup: muscleGroup,
                             equipmentType: equipmentType,
+                            weightType: weightType,
                             requiresStraps: requiresStraps,
                             defaultRestCondition: restCondition
                         )

@@ -15,7 +15,13 @@ struct ExerciseSettingsView: View {
                 }
 
                 Section("Configuración") {
-                    Picker("Grupo muscular", selection: muscleGroupBinding) {
+                    Picker("Tipo de peso", selection: weightTypeBinding) {
+                        ForEach(WeightType.allCases) { weightType in
+                            Text(weightType.rawValue).tag(weightType)
+                        }
+                    }
+
+                    Picker("Grupo muscular objetivo", selection: muscleGroupBinding) {
                         ForEach(MuscleGroup.allCases) { group in
                             Text(group.rawValue).tag(group)
                         }
@@ -40,7 +46,7 @@ struct ExerciseSettingsView: View {
             }
             .preferredColorScheme(.dark)
             .tint(.green)
-            .navigationTitle("Configuración")
+            .navigationTitle("Ajustar ejercicio")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -53,6 +59,13 @@ struct ExerciseSettingsView: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    private var weightTypeBinding: Binding<WeightType> {
+        Binding(
+            get: { exercise.weightType },
+            set: { exercise.weightType = $0 }
+        )
     }
 
     private var muscleGroupBinding: Binding<MuscleGroup> {

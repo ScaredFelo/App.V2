@@ -27,6 +27,35 @@ public enum EquipmentType: String, Codable, CaseIterable, Sendable, Identifiable
     public var id: String { rawValue }
 }
 
+public enum WeightType: String, Codable, CaseIterable, Sendable, Identifiable {
+    case mancuernas = "Mancuernas"
+    case discos = "Discos"
+    case polea = "Polea"
+    case barra = "Barra"
+    case maquina = "Máquina"
+    case pesoCorporal = "Peso Corporal"
+    case bandaElastica = "Banda Elástica"
+    case kettlebell = "Kettlebell"
+    case otro = "Otro"
+
+    public var id: String { rawValue }
+
+    public static func defaultFor(_ equipment: EquipmentType) -> WeightType {
+        switch equipment {
+        case .mancuernas:
+            return .mancuernas
+        case .poleas:
+            return .polea
+        case .barraFija:
+            return .pesoCorporal
+        case .discosMaquina:
+            return .discos
+        case .multipower, .barraOlimpica, .barraEZ:
+            return .barra
+        }
+    }
+}
+
 public enum RestCondition: Codable, Sendable, Hashable {
     case timer(seconds: Int)
     case bpmDrop(targetBpm: Int)

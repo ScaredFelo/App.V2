@@ -20,7 +20,7 @@ public struct ActiveWorkoutView: View {
     }
 
     public var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             Color.black.ignoresSafeArea()
 
             // List of exercises on the main level
@@ -97,13 +97,16 @@ public struct ActiveWorkoutView: View {
                             .background(Color.red.opacity(0.12))
                             .cornerRadius(12)
                     }
-                    .padding(.bottom, 24)
+
+                    // Reserva el mismo espacio inferior exista o no temporizador flotante.
+                    Color.clear
+                        .frame(height: 80)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 20)
             }
 
-            // Floating Rest UI
+            // Temporizador maximizado
             if viewModel.isResting && !viewModel.isTimerMinimized {
                 ZStack {
                     Color.black.ignoresSafeArea()
@@ -129,8 +132,34 @@ public struct ActiveWorkoutView: View {
                         Spacer()
                     }
                 }
+                .zIndex(2)
+            }
+
+            // Temporizador minimizado flotando sobre la lista
+            if viewModel.isResting && viewModel.isTimerMinimized {
+                MinimizedTimerView(
+                    timeRemaining: viewModel.restTimeRemaining,
+                    isPaused: viewModel.isRestPaused,
+                    onExpand: { viewModel.isTimerMinimized = false },
+                    onTogglePause: {
+                        if viewModel.isRestPaused {
+                            viewModel.resumeRest()
+                        } else {
+                            viewModel.pauseRest()
+                        }
+                    },
+                    onAdd10: { viewModel.add10Seconds() },
+                    onSub10: { viewModel.sub10Seconds() },
+                    onSkip: { viewModel.skipRest() }
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+                .frame(maxWidth: .infinity)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(1)
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: viewModel.isTimerMinimized)
         .onAppear {
             BPMManager.shared.startScanning()
         }
@@ -139,9 +168,6 @@ public struct ActiveWorkoutView: View {
         }
         .navigationBarHidden(true)
         .interactiveDismissDisabled(true)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            workoutFooter
-        }
         .sheet(isPresented: $showingExercisePicker) {
             ExercisePickerView { exercise in
                 _ = viewModel.addExercise(exercise, modelContext: modelContext)
@@ -208,31 +234,6 @@ public struct ActiveWorkoutView: View {
             Button("Cancelar", role: .cancel) { exercisePendingRemoval = nil }
         } message: {
             Text("El ejercicio se quitará del entrenamiento actual.")
-        }
-    }
-
-    @ViewBuilder
-    private var workoutFooter: some View {
-        if viewModel.isResting && viewModel.isTimerMinimized {
-            MinimizedTimerView(
-                timeRemaining: viewModel.restTimeRemaining,
-                isPaused: viewModel.isRestPaused,
-                onExpand: { viewModel.isTimerMinimized = false },
-                onTogglePause: {
-                    if viewModel.isRestPaused {
-                        viewModel.resumeRest()
-                    } else {
-                        viewModel.pauseRest()
-                    }
-                },
-                onAdd10: { viewModel.add10Seconds() },
-                onSub10: { viewModel.sub10Seconds() },
-                onSkip: { viewModel.skipRest() }
-            )
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
-            .background(Color.clear)
-            .frame(maxWidth: .infinity)
         }
     }
 

@@ -49,10 +49,7 @@ struct EditRoutineView: View {
                     Section {
                         RoutineExerciseEditorRow(
                             routineExercise: routineExercise,
-                            exercises: exercises,
-                            onConfigure: { exercise in
-                                exerciseToConfigure = exercise
-                            }
+                            exercises: exercises
                         )
                     } header: {
                         HStack {
@@ -90,7 +87,24 @@ struct EditRoutineView: View {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancelar") { dismiss() }
             }
-            ToolbarItem(placement: .confirmationAction) {
+
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Menu {
+                    ForEach(sortedExercises) { routineExercise in
+                        if let exercise = routineExercise.exercise {
+                            Button {
+                                exerciseToConfigure = exercise
+                            } label: {
+                                Label(exercise.name, systemImage: "gearshape")
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                }
+                .disabled(sortedExercises.isEmpty)
+                .accessibilityLabel("Ajustar ejercicio")
+
                 Button("Guardar") {
                     try? modelContext.save()
                     dismiss()
@@ -142,7 +156,6 @@ struct EditRoutineView: View {
 private struct RoutineExerciseEditorRow: View {
     @Bindable var routineExercise: RoutineExercise
     let exercises: [Exercise]
-    let onConfigure: (Exercise) -> Void
 
     @State private var notesExpanded = false
 
@@ -159,21 +172,6 @@ private struct RoutineExerciseEditorRow: View {
                 TextField("Nombre del ejercicio", text: exerciseNameBinding)
                     .textFieldStyle(.roundedBorder)
                     .disabled(routineExercise.exercise == nil)
-
-                if let exercise = routineExercise.exercise {
-                    Button {
-                        onConfigure(exercise)
-                    } label: {
-                        Image(systemName: "gearshape.fill")
-                            .font(.subheadline)
-                            .foregroundStyle(.green)
-                            .frame(width: 32, height: 32)
-                            .background(Color.green.opacity(0.15))
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel("Configuración del ejercicio")
-                }
 
                 Menu {
                     ForEach(exercises) { exercise in

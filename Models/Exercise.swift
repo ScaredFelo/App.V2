@@ -7,6 +7,7 @@ public final class Exercise {
     public var name: String
     public var muscleGroupRaw: String
     public var equipmentTypeRaw: String
+    public var weightTypeRaw: String?
     public var requiresStraps: Bool
     public var defaultRestConditionData: Data
 
@@ -26,6 +27,18 @@ public final class Exercise {
     }
 
     @Transient
+    public var weightType: WeightType {
+        get {
+            guard let weightTypeRaw = weightTypeRaw,
+                  let type = WeightType(rawValue: weightTypeRaw) else {
+                return WeightType.defaultFor(equipmentType)
+            }
+            return type
+        }
+        set { weightTypeRaw = newValue.rawValue }
+    }
+
+    @Transient
     public var defaultRestCondition: RestCondition {
         get {
             (try? JSONDecoder().decode(RestCondition.self, from: defaultRestConditionData)) ?? .timer(seconds: 90)
@@ -40,6 +53,7 @@ public final class Exercise {
         name: String,
         muscleGroup: MuscleGroup,
         equipmentType: EquipmentType,
+        weightType: WeightType? = nil,
         requiresStraps: Bool = false,
         defaultRestCondition: RestCondition = .timer(seconds: 90)
     ) {
@@ -47,6 +61,7 @@ public final class Exercise {
         self.name = name
         self.muscleGroupRaw = muscleGroup.rawValue
         self.equipmentTypeRaw = equipmentType.rawValue
+        self.weightTypeRaw = (weightType ?? WeightType.defaultFor(equipmentType)).rawValue
         self.requiresStraps = requiresStraps
         self.defaultRestConditionData = (try? JSONEncoder().encode(defaultRestCondition)) ?? Data()
     }
