@@ -7,11 +7,15 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "17.0"
-    bundleId: com.jordiferres.appgym
     sources:
       - path: .
+        excludes:
+          - "*.md"
+          - ".github"
+          - "build"
     settings:
       base:
+        PRODUCT_NAME: AppGym
         PRODUCT_BUNDLE_IDENTIFIER: com.jordiferres.appgym
         INFOPLIST_FILE: Info.plist
         CODE_SIGNING_REQUIRED: "NO"

@@ -15,17 +15,12 @@ jobs:
 
       - name: Wipe Unused Xcode Versions & Free Disk Space
         run: |
-          echo "Espacio en disco antes del borrado:"
-          df -h /
-          # Eliminar versiones secundarias de Xcode que consumen más de 30GB
           sudo rm -rf /Applications/Xcode_15*.app
           sudo rm -rf /Applications/Xcode_14*.app
           sudo rm -rf /usr/local/share/android-sdk
           sudo rm -rf /usr/local/share/dotnet
           sudo rm -rf /Library/Developer/CoreSimulator/Caches
           rm -rf ~/Library/Caches/com.apple.dt.XCode
-          echo "Espacio en disco liberado:"
-          df -h /
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -47,13 +42,17 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             ONLY_ACTIVE_ARCH=YES \
-            ARCHS=arm64 \
-            -quiet
+            ARCHS=arm64
 
       - name: Package IPA
         run: |
           mkdir -p Payload
-          mv /tmp/DerivedData/Build/Products/Release-iphoneos/AppGym.app Payload/
+          cp -R /tmp/DerivedData/Build/Products/Release-iphoneos/AppGym.app Payload/
+          ls -la Payload/AppGym.app
+          if [ ! -f "Payload/AppGym.app/AppGym" ]; then
+            echo "Error: El ejecutable AppGym no se encuentra en Payload/AppGym.app/"
+            exit 1
+          fi
           zip -r AppGym.ipa Payload
 
       - name: Upload IPA Artifact
