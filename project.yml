@@ -28,10 +28,12 @@ targets:
       properties:
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
+        UIBackgroundModes:
+          - processing
         NSBluetoothAlwaysUsageDescription: "AppGym requiere acceso a Bluetooth para conectar con el sensor de pulso cardíaco."
         NSBluetoothPeripheralUsageDescription: "AppGym requiere acceso a Bluetooth para conectar con el sensor de pulso cardíaco."
-        NSHealthShareUsageDescription: "AppGym lee las pulsaciones de tus AirPods o Apple Watch en tiempo real."
-        NSHealthUpdateUsageDescription: "AppGym registra el resumen de tus entrenamientos en Salud."
+        NSHealthShareUsageDescription: "AppGym lee las pulsaciones de tus AirPods Pro en tiempo real."
+        NSHealthUpdateUsageDescription: "AppGym registra tus entrenamientos en la app Salud."
     settings:
       base:
         PRODUCT_NAME: AppGym

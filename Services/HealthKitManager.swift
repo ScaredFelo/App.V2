@@ -5,38 +5,36 @@ import Combine
 class HealthKitManager: ObservableObject {
     @Published var currentBPM: Int = 0
     @Published var isAuthorized: Bool = false
+    @Published var dataSourceName: String = "Buscando fuente..."
     
     private let healthStore = HKHealthStore()
     private var anchor: HKQueryAnchor?
     
     func solicitarPermisoHealthKit() {
         guard HKHealthStore.isHealthDataAvailable() else {
-            print("HealthKit no está disponible en este dispositivo.")
+            print("HealthKit no disponible en simulador o dispositivo sin soporte.")
             return
         }
         
         guard let heartRateType = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
-        let workoutType = HKObjectType.workoutType()
-        
         let typesToRead: Set<HKObjectType> = [heartRateType]
-        let typesToShare: Set<HKSampleType> = [workoutType]
         
-        healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead) { [weak self] success, error in
+        healthStore.requestAuthorization(toShare: nil, read: typesToRead) { [weak self] success, error in
             DispatchQueue.main.async {
                 if let error = error {
-                    print("Error al solicitar autorización de HealthKit: \(error.localizedDescription)")
+                    print("Error solicitando permisos: \(error.localizedDescription)")
                     self?.isAuthorized = false
                 } else {
                     self?.isAuthorized = success
                     if success {
-                        self?.iniciarObservacionBPM()
+                        self?.iniciarObservacionInmediata()
                     }
                 }
             }
         }
     }
     
-    func iniciarObservacionBPM() {
+    func iniciarObservacionInmediata() {
         guard let heartRateType = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
         
         healthStore.enableBackgroundDelivery(for: heartRateType, frequency: .immediate) { _, _ in }
@@ -61,14 +59,22 @@ class HealthKitManager: ObservableObject {
     }
     
     private func procesarMuestras(_ samples: [HKSample]?) {
-        guard let quantitySamples = samples as? [HKQuantitySample], let lastSample = quantitySamples.last else { return }
+        guard let quantitySamples = samples as? [HKQuantitySample] else { return }
+        
+        // Priorizar muestras cuya fuente sea AirPods
+        let airPodsSample = quantitySamples.last(where: { $0.sourceRevision.source.name.localizedCaseInsensitiveContains("AirPods") })
+        let sampleToUse = airPodsSample ?? quantitySamples.last
+        
+        guard let finalSample = sampleToUse else { return }
         
         let unit = HKUnit.count().unitDivided(by: HKUnit.minute())
-        let bpm = Int(lastSample.quantity.doubleValue(for: unit))
+        let bpm = Int(finalSample.quantity.doubleValue(for: unit))
+        let sourceName = finalSample.sourceRevision.source.name
         
         DispatchQueue.main.async {
             if bpm > 0 {
                 self.currentBPM = bpm
+                self.dataSourceName = sourceName
             }
         }
     }
@@ -77,16 +83,8 @@ class HealthKitManager: ObservableObject {
         guard let heartRateType = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
         
-        let query = HKSampleQuery(sampleType: heartRateType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { [weak self] _, results, _ in
-            guard let sample = results?.first as? HKQuantitySample else { return }
-            let unit = HKUnit.count().unitDivided(by: HKUnit.minute())
-            let bpm = Int(sample.quantity.doubleValue(for: unit))
-            
-            DispatchQueue.main.async {
-                if bpm > 0 {
-                    self?.currentBPM = bpm
-                }
-            }
+        let query = HKSampleQuery(sampleType: heartRateType, predicate: nil, limit: 10, sortDescriptors: [sortDescriptor]) { [weak self] _, results, _ in
+            self?.procesarMuestras(results)
         }
         healthStore.execute(query)
     }
