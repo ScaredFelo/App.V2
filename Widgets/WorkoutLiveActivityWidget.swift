@@ -2,7 +2,6 @@ import SwiftUI
 import WidgetKit
 import ActivityKit
 
-@main
 struct WorkoutLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: WorkoutActivityAttributes.self) { context in
