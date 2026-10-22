@@ -9,6 +9,8 @@ targets:
     platform: iOS
     deploymentTarget: "17.0"
     bundleId: com.jordiferres.appgym
+    entitlements:
+      path: AppGym.entitlements
     sources:
       - path: App.swift
       - path: Models
