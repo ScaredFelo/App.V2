@@ -12,12 +12,41 @@ final class BPMManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     private var centralManager: CBCentralManager?
     private var heartRatePeripheral: CBPeripheral?
 
+    private let healthKitManager = HealthKitManager()
+    private var cancellables = Set<AnyCancellable>()
+
     override init() {
         super.init()
+
+        // HealthKit (AirPods / Apple Watch)
+        healthKitManager.$currentBPM
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] bpm in
+                guard let self, bpm > 0 else { return }
+                // Priorizamos el pulsómetro BLE mientras esté conectado
+                if self.heartRatePeripheral == nil {
+                    self.currentBPM = bpm
+                    self.isConnected = true
+                    self.statusText = "\(bpm) BPM"
+                }
+            }
+            .store(in: &cancellables)
+
+        requestHealthKitAccess()
+
         // Inicialización tardía para asegurar permisos
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.centralManager = CBCentralManager(delegate: self, queue: nil)
+        }
+    }
+
+    func requestHealthKitAccess() {
+        healthKitManager.requestAuthorization { [weak self] success in
+            DispatchQueue.main.async {
+                guard let self, self.currentBPM == 0 else { return }
+                self.statusText = success ? "HealthKit listo" : "Sin acceso a Salud"
+            }
         }
     }
 
