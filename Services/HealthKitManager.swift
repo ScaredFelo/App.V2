@@ -7,7 +7,8 @@ final class HealthKitManager: ObservableObject {
     @Published var isAuthorized: Bool = false
 
     private let healthStore = HKHealthStore()
-    private var heartRateQuery: HKQuery?
+    private var anchor: HKQueryAnchor?
+    private var isQueryRunning = false
 
     func requestAuthorization(completion: @escaping (Bool) -> Void) {
         guard HKHealthStore.isHealthDataAvailable() else {
@@ -24,43 +25,53 @@ final class HealthKitManager: ObservableObject {
             DispatchQueue.main.async {
                 self?.isAuthorized = success
                 if success {
-                    self?.startHeartRateObserver()
+                    self?.startLiveHeartRateQuery()
                 }
                 completion(success)
             }
         }
     }
 
-    func startHeartRateObserver() {
+    func startLiveHeartRateQuery() {
+        guard !isQueryRunning else { return }
         guard let heartRateType = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
+        isQueryRunning = true
 
-        let query = HKObserverQuery(sampleType: heartRateType, predicate: nil) { [weak self] _, _, error in
-            if error == nil {
-                self?.fetchLatestHeartRate()
-            }
+        let samplePredicate = HKQuery.predicateForSamples(
+            withStart: Date().addingTimeInterval(-3600),
+            end: nil,
+            options: .strictStartDate
+        )
+
+        let query = HKAnchoredObjectQuery(
+            type: heartRateType,
+            predicate: samplePredicate,
+            anchor: anchor,
+            limit: HKObjectQueryNoLimit
+        ) { [weak self] _, samples, _, newAnchor, _ in
+            self?.anchor = newAnchor
+            self?.processHeartRateSamples(samples)
+        }
+
+        query.updateHandler = { [weak self] _, samples, _, newAnchor, _ in
+            self?.anchor = newAnchor
+            self?.processHeartRateSamples(samples)
         }
 
         healthStore.execute(query)
-        heartRateQuery = query
-        healthStore.enableBackgroundDelivery(for: heartRateType, frequency: .immediate) { _, _ in }
-        fetchLatestHeartRate()
     }
 
-    private func fetchLatestHeartRate() {
-        guard let heartRateType = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
-        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+    private func processHeartRateSamples(_ samples: [HKSample]?) {
+        guard let quantitySamples = samples as? [HKQuantitySample],
+              let latestSample = quantitySamples.max(by: { $0.startDate < $1.startDate }) else { return }
 
-        let sampleQuery = HKSampleQuery(sampleType: heartRateType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { [weak self] _, results, _ in
-            guard let sample = results?.first as? HKQuantitySample else { return }
-            let unit = HKUnit.count().unitDivided(by: HKUnit.minute())
-            let bpm = Int(sample.quantity.doubleValue(for: unit))
+        let unit = HKUnit.count().unitDivided(by: HKUnit.minute())
+        let bpm = Int(latestSample.quantity.doubleValue(for: unit))
 
-            DispatchQueue.main.async {
-                if bpm > 0 {
-                    self?.currentBPM = bpm
-                }
+        DispatchQueue.main.async {
+            if bpm > 0 {
+                self.currentBPM = bpm
             }
         }
-        healthStore.execute(sampleQuery)
     }
 }

@@ -5,6 +5,7 @@ import UserNotifications
 @main
 struct AppGymApp: App {
     let container: ModelContainer
+    @StateObject private var bpmManager = BPMManager.shared
 
     init() {
         do {
@@ -25,7 +26,10 @@ struct AppGymApp: App {
     var body: some Scene {
         WindowGroup {
             MainTabView()
+                .environmentObject(bpmManager)
                 .onAppear {
+                    bpmManager.requestHealthKitAccess()
+
                     // Solicitar notificaciones explícitamente para Live Activities
                     UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
                         if let error = error {
