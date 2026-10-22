@@ -15,6 +15,11 @@ targets:
       - path: ViewModels
       - path: Views
       - path: Widgets
+    frameworks:
+      - sdk: HealthKit.framework
+      - sdk: CoreBluetooth.framework
+      - sdk: ActivityKit.framework
+      - sdk: WidgetKit.framework
     settings:
       base:
         PRODUCT_NAME: AppGym
