@@ -3,8 +3,10 @@ import SwiftUI
 public struct CircularTimerView: View {
     public let timeRemaining: Int
     public let totalSeconds: Int
+    public let isPaused: Bool
     public let onAdd10: () -> Void
     public let onSub10: () -> Void
+    public let onTogglePause: () -> Void
     public let onSkip: () -> Void
     public let onMinimize: () -> Void
 
@@ -16,15 +18,19 @@ public struct CircularTimerView: View {
     public init(
         timeRemaining: Int,
         totalSeconds: Int,
+        isPaused: Bool,
         onAdd10: @escaping () -> Void,
         onSub10: @escaping () -> Void,
+        onTogglePause: @escaping () -> Void,
         onSkip: @escaping () -> Void,
         onMinimize: @escaping () -> Void
     ) {
         self.timeRemaining = timeRemaining
         self.totalSeconds = totalSeconds
+        self.isPaused = isPaused
         self.onAdd10 = onAdd10
         self.onSub10 = onSub10
+        self.onTogglePause = onTogglePause
         self.onSkip = onSkip
         self.onMinimize = onMinimize
     }
@@ -39,18 +45,19 @@ public struct CircularTimerView: View {
                 // Progress Arc
                 Circle()
                     .trim(from: 0, to: progress)
-                    .stroke(Color.green, style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                    .stroke(isPaused ? Color.orange : Color.green, style: StrokeStyle(lineWidth: 12, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .animation(.linear(duration: 1.0), value: progress)
 
                 // Time Display
                 VStack(spacing: 4) {
-                    Text("DESCANSO")
+                    Text(isPaused ? "PAUSADO" : "DESCANSO")
                         .font(.caption2.bold())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(isPaused ? Color.orange : Color.secondary)
                     Text(timeFormatted(timeRemaining))
                         .font(.system(size: 42, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
+                        .monospacedDigit()
                 }
             }
             .frame(width: 180, height: 180)
@@ -58,21 +65,34 @@ public struct CircularTimerView: View {
             // Adjust Controls (+10s / -10s)
             HStack(spacing: 20) {
                 Button(action: onSub10) {
-                    Text("-10s")
-                        .font(.subheadline.bold())
+                    Image(systemName: "goback.10")
+                        .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.white)
-                        .frame(width: 60, height: 36)
+                        .frame(width: 60, height: 40)
                         .background(Color(.systemGray6).opacity(0.3))
-                        .cornerRadius(18)
+                        .cornerRadius(20)
+                        .fixedSize()
                 }
 
+                Button(action: onTogglePause) {
+                    Image(systemName: isPaused ? "play.fill" : "pause.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(isPaused ? .black : .white)
+                        .frame(width: 60, height: 40)
+                        .background(isPaused ? Color.white : Color(.systemGray6).opacity(0.3))
+                        .cornerRadius(20)
+                        .fixedSize()
+                }
+                .accessibilityLabel(isPaused ? "Reanudar descanso" : "Pausar descanso")
+
                 Button(action: onAdd10) {
-                    Text("+10s")
-                        .font(.subheadline.bold())
+                    Image(systemName: "goforward.10")
+                        .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.white)
-                        .frame(width: 60, height: 36)
+                        .frame(width: 60, height: 40)
                         .background(Color(.systemGray6).opacity(0.3))
-                        .cornerRadius(18)
+                        .cornerRadius(20)
+                        .fixedSize()
                 }
             }
 
@@ -96,8 +116,12 @@ public struct CircularTimerView: View {
             }
             .padding()
         }
-        .background(Color.black.opacity(0.95))
-        .cornerRadius(24)
+        .background(Color.black)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+        )
         .padding(.horizontal, 20)
     }
 

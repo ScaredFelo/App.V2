@@ -120,7 +120,8 @@ struct ExerciseRowView: View {
                     Text("•")
                     Label(exercise.equipmentType.rawValue, systemImage: "dumbbell.fill")
                     if exercise.requiresStraps {
-                        Text("• Straps")
+                        Label("Recoger Straps", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
                     }
                 }
                 .font(.caption)

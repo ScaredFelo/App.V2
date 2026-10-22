@@ -7,6 +7,7 @@ public struct RoutineListView: View {
 
     @State private var activeSession: WorkoutSession? = nil
     @State private var selectedRoutineForWorkout: Routine? = nil
+    @State private var routineToEdit: Routine? = nil
 
     public var body: some View {
         NavigationStack {
@@ -15,19 +16,37 @@ public struct RoutineListView: View {
 
                 List {
                     ForEach(routines) { routine in
-                        RoutineRowView(routine: routine) {
-                            startWorkout(with: routine)
-                        }
+                        RoutineRowView(
+                            routine: routine,
+                            onStart: { startWorkout(with: routine) },
+                            onEdit: { routineToEdit = routine }
+                        )
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
             .navigationTitle("Rutinas")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: createRoutine) {
+                        Image(systemName: "plus")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                    }
+                    .accessibilityLabel("Nueva rutina")
+                }
+            }
             .fullScreenCover(item: $activeSession) { session in
                 if let routine = selectedRoutineForWorkout {
                     ActiveWorkoutView(session: session, routine: routine, modelContext: modelContext)
+                }
+            }
+            .sheet(item: $routineToEdit) { routine in
+                NavigationStack {
+                    EditRoutineView(routine: routine)
                 }
             }
         }
@@ -40,11 +59,19 @@ public struct RoutineListView: View {
         selectedRoutineForWorkout = routine
         activeSession = session
     }
+
+    private func createRoutine() {
+        let routine = Routine(name: "Nueva rutina", isTemplate: true, exercises: [])
+        modelContext.insert(routine)
+        try? modelContext.save()
+        routineToEdit = routine
+    }
 }
 
 struct RoutineRowView: View {
     let routine: Routine
     let onStart: () -> Void
+    let onEdit: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -58,6 +85,16 @@ struct RoutineRowView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
+
+                Button(action: onEdit) {
+                    Image(systemName: "pencil")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(Color(.systemGray6).opacity(0.3))
+                        .clipShape(Circle())
+                }
+                .accessibilityLabel("Editar rutina")
 
                 Button(action: onStart) {
                     HStack(spacing: 4) {

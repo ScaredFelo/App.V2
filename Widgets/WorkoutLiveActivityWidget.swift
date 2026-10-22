@@ -20,9 +20,13 @@ struct WorkoutLiveActivityWidget: Widget {
                             .font(.caption2)
                             .fontWeight(.bold)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                         Text(context.state.exerciseName)
                             .font(.headline)
                             .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
@@ -30,9 +34,12 @@ struct WorkoutLiveActivityWidget: Widget {
                             .font(.caption)
                             .bold()
                             .foregroundStyle(.red)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                         Text("Serie \(context.state.currentSet)")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 }
                 
@@ -46,16 +53,20 @@ struct WorkoutLiveActivityWidget: Widget {
                         Text("Descanso")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                         Spacer()
                         Text(context.state.timerEndDate, style: .timer)
                             .font(.caption)
                             .bold()
                             .monospacedDigit()
                             .foregroundStyle(.green)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
             }
-            .padding()
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
             .activityBackgroundTint(Color.black.opacity(0.85))
             
         } dynamicIsland: { context in
@@ -66,11 +77,14 @@ struct WorkoutLiveActivityWidget: Widget {
                         Text(context.attributes.workoutName.uppercased())
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                         Text(context.state.exerciseName)
                             .font(.headline)
                             .bold()
                             .foregroundStyle(.white)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
                 
@@ -83,9 +97,13 @@ struct WorkoutLiveActivityWidget: Widget {
                         }
                         .font(.subheadline)
                         .bold()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         Text("Serie \(context.state.currentSet)")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
                 
@@ -100,12 +118,16 @@ struct WorkoutLiveActivityWidget: Widget {
                             Text("Descanso restante")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                             Spacer()
                             Text(context.state.timerEndDate, style: .timer)
                                 .font(.headline)
                                 .bold()
                                 .monospacedDigit()
                                 .foregroundStyle(.green)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                         }
                     }
                     .padding(.top, 8)
@@ -120,6 +142,8 @@ struct WorkoutLiveActivityWidget: Widget {
                     Text(context.state.currentBPM > 0 ? "\(context.state.currentBPM)" : "--")
                         .font(.system(size: 12, weight: .bold))
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
             } compactTrailing: {
                 // Modo Compacto Derecha (Barra centrada y alineada + un único temporizador)
@@ -133,6 +157,8 @@ struct WorkoutLiveActivityWidget: Widget {
                         .font(.system(size: 12, weight: .bold))
                         .monospacedDigit()
                         .foregroundStyle(.green)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
             } minimal: {
                 ProgressView(timerInterval: Date()...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })

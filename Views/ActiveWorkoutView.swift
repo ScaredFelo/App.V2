@@ -7,6 +7,12 @@ public struct ActiveWorkoutView: View {
 
     @State private var viewModel: ActiveWorkoutViewModel
     @State private var showingFinishConfirmation = false
+    @State private var showingCancelConfirmation = false
+    @State private var showingRoutineChangeOptions = false
+    @State private var showingNewRoutineNameAlert = false
+    @State private var showingExercisePicker = false
+    @State private var exercisePendingRemoval: RoutineExercise?
+    @State private var newRoutineName = ""
     @ObservedObject private var bpmManager = BPMManager.shared
 
     public init(session: WorkoutSession, routine: Routine, modelContext: ModelContext) {
@@ -23,7 +29,9 @@ public struct ActiveWorkoutView: View {
                     // Header Status & BPM
                     workoutHeader
                         .padding(.top, 10)
-                    
+
+                    let _ = viewModel.structureVersion
+
                     ForEach(viewModel.routine.exercises.sorted(by: { $0.sortOrder < $1.sortOrder })) { routineExercise in
                         if let exercise = routineExercise.exercise {
                             ExerciseCardView(
@@ -39,14 +47,33 @@ public struct ActiveWorkoutView: View {
                                         sets[setIndex].reps = reps
                                         viewModel.activeSets[routineExercise.id] = sets
                                     }
+                                },
+                                onRemove: {
+                                    exercisePendingRemoval = routineExercise
                                 }
                             )
                         }
                     }
 
+                    Button {
+                        showingExercisePicker = true
+                    } label: {
+                        Label("Añadir ejercicio", systemImage: "plus.circle.fill")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color(.systemGray6).opacity(0.2))
+                            .cornerRadius(12)
+                    }
+
                     // Finish Workout Button
                     Button(action: {
-                        showingFinishConfirmation = true
+                        if viewModel.hasRoutineChanged {
+                            showingRoutineChangeOptions = true
+                        } else {
+                            showingFinishConfirmation = true
+                        }
                     }) {
                         Text("Finalizar Entrenamiento")
                             .font(.headline)
@@ -56,8 +83,20 @@ public struct ActiveWorkoutView: View {
                             .background(Color.white)
                             .cornerRadius(12)
                     }
-                    .padding(.top, 16)
-                    .padding(.bottom, 100)
+                    .padding(.top, 8)
+
+                    Button(action: {
+                        showingCancelConfirmation = true
+                    }) {
+                        Label("Cancelar entrenamiento", systemImage: "xmark.circle")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.red.opacity(0.12))
+                            .cornerRadius(12)
+                    }
+                    .padding(.bottom, 140)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 20)
@@ -66,26 +105,55 @@ public struct ActiveWorkoutView: View {
             // Floating Rest UI
             if viewModel.isResting {
                 if !viewModel.isTimerMinimized {
-                    // Eliminado Color.black.opacity(0.85).ignoresSafeArea()
-                    CircularTimerView(
-                        timeRemaining: viewModel.restTimeRemaining,
-                        totalSeconds: viewModel.totalRestSeconds,
-                        onAdd10: { viewModel.add10Seconds() },
-                        onSub10: { viewModel.sub10Seconds() },
-                        onSkip: { viewModel.skipRest() },
-                        onMinimize: { viewModel.isTimerMinimized = true }
-                    )
+                    ZStack {
+                        Color.black.ignoresSafeArea()
+
+                        VStack {
+                            Spacer()
+                            CircularTimerView(
+                                timeRemaining: viewModel.restTimeRemaining,
+                                totalSeconds: viewModel.totalRestSeconds,
+                                isPaused: viewModel.isRestPaused,
+                                onAdd10: { viewModel.add10Seconds() },
+                                onSub10: { viewModel.sub10Seconds() },
+                                onTogglePause: {
+                                    if viewModel.isRestPaused {
+                                        viewModel.resumeRest()
+                                    } else {
+                                        viewModel.pauseRest()
+                                    }
+                                },
+                                onSkip: { viewModel.skipRest() },
+                                onMinimize: { viewModel.isTimerMinimized = true }
+                            )
+                            Spacer()
+                        }
+                    }
                 } else {
                     VStack {
                         Spacer()
                         MinimizedTimerView(
                             timeRemaining: viewModel.restTimeRemaining,
+                            isPaused: viewModel.isRestPaused,
                             onExpand: { viewModel.isTimerMinimized = false },
+                            onTogglePause: {
+                                if viewModel.isRestPaused {
+                                    viewModel.resumeRest()
+                                } else {
+                                    viewModel.pauseRest()
+                                }
+                            },
                             onAdd10: { viewModel.add10Seconds() },
+                            onSub10: { viewModel.sub10Seconds() },
                             onSkip: { viewModel.skipRest() }
                         )
-                        .padding(.bottom, 30)
+                        .padding(.bottom, 12)
                         .allowsHitTesting(true)
+                    }
+                    .background(alignment: .bottom) {
+                        Color.black
+                            .frame(height: 96)
+                            .ignoresSafeArea(edges: .bottom)
                     }
                 }
             }
@@ -94,6 +162,12 @@ public struct ActiveWorkoutView: View {
             bpmManager.startScanning()
         }
         .navigationBarHidden(true)
+        .interactiveDismissDisabled(true)
+        .sheet(isPresented: $showingExercisePicker) {
+            ExercisePickerView { exercise in
+                _ = viewModel.addExercise(exercise, modelContext: modelContext)
+            }
+        }
         .alert("¿Finalizar entrenamiento?", isPresented: $showingFinishConfirmation) {
             Button("Finalizar", role: .destructive) {
                 _ = viewModel.finishWorkout(modelContext: modelContext)
@@ -103,14 +177,82 @@ public struct ActiveWorkoutView: View {
         } message: {
             Text("¿Estás seguro de que deseas finalizar la sesión actual?")
         }
+        .alert("La rutina ha cambiado", isPresented: $showingRoutineChangeOptions) {
+            Button("Reemplazar rutina actual", role: .destructive) {
+                _ = viewModel.finishWorkoutReplacingRoutine(modelContext: modelContext)
+                dismiss()
+            }
+            Button("Guardar como nueva rutina") {
+                newRoutineName = "\(viewModel.routine.name) (modificada)"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    showingNewRoutineNameAlert = true
+                }
+            }
+            Button("Guardar solo el historial de hoy") {
+                _ = viewModel.finishWorkoutHistoryOnly(modelContext: modelContext)
+                dismiss()
+            }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("Has modificado la rutina durante el entrenamiento. ¿Qué quieres hacer con los cambios?")
+        }
+        .alert("Nueva rutina", isPresented: $showingNewRoutineNameAlert) {
+            TextField("Nombre de la rutina", text: $newRoutineName)
+            Button("Guardar") {
+                _ = viewModel.finishWorkoutSavingAsNewRoutine(named: newRoutineName, modelContext: modelContext)
+                dismiss()
+            }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("Se guardará una copia con los cambios de hoy.")
+        }
+        .alert("¿Cancelar entrenamiento?", isPresented: $showingCancelConfirmation) {
+            Button("Cancelar entrenamiento", role: .destructive) {
+                viewModel.cancelWorkout(modelContext: modelContext)
+                dismiss()
+            }
+            Button("Seguir entrenando", role: .cancel) {}
+        } message: {
+            Text("Se descartará la sesión actual sin guardar el historial.")
+        }
+        .alert(
+            "Eliminar ejercicio",
+            isPresented: Binding(
+                get: { exercisePendingRemoval != nil },
+                set: { if !$0 { exercisePendingRemoval = nil } }
+            )
+        ) {
+            Button("Eliminar", role: .destructive) {
+                if let routineExercise = exercisePendingRemoval {
+                    viewModel.removeExercise(routineExercise, modelContext: modelContext)
+                }
+                exercisePendingRemoval = nil
+            }
+            Button("Cancelar", role: .cancel) { exercisePendingRemoval = nil }
+        } message: {
+            Text("El ejercicio se quitará del entrenamiento actual.")
+        }
     }
 
     private var workoutHeader: some View {
-        HStack {
+        HStack(spacing: 10) {
+            Button {
+                showingCancelConfirmation = true
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background(Color(.systemGray6).opacity(0.3))
+                    .clipShape(Circle())
+            }
+            .accessibilityLabel("Cancelar entrenamiento")
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(viewModel.routine.name)
                     .font(.headline)
                     .foregroundStyle(.white)
+                    .lineLimit(1)
                 Text("Volumen: \(Int(viewModel.session.totalVolumeKg)) kg")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -130,15 +272,18 @@ public struct ActiveWorkoutView: View {
                     Image(systemName: "heart.fill")
                         .foregroundStyle(bpmManager.currentBPM > 0 ? .red : .gray)
                         .symbolEffect(.pulse, isActive: bpmManager.currentBPM > 0)
-                    
+
                     if bpmManager.currentBPM > 0 {
                         Text("\(bpmManager.currentBPM) BPM")
                             .font(.subheadline.bold())
                             .foregroundStyle(.white)
+                            .lineLimit(1)
                     } else {
                         Text(bpmManager.statusText) // Usar statusText del gestor
                             .font(.caption.bold())
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
                 .padding(.horizontal, 12)
@@ -149,7 +294,12 @@ public struct ActiveWorkoutView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .background(Color.black.opacity(0.8))
+        .background(Color.black)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+        )
     }
 }
 
@@ -160,25 +310,56 @@ struct ExerciseCardView: View {
     let sets: [ActiveWorkoutViewModel.SetInputState]
     let onToggleSet: (Int) -> Void
     let onUpdateSet: (Int, Double, Int) -> Void
+    let onRemove: () -> Void
+
+    @State private var notesExpanded = false
+
+    private var notesBinding: Binding<String> {
+        Binding(
+            get: { routineExercise.notes },
+            set: { routineExercise.notes = $0 }
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(exercise.name)
                         .font(.title3.bold())
                         .foregroundStyle(.white)
                     Text("\(exercise.muscleGroup.rawValue) • \(exercise.equipmentType.rawValue)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    if exercise.requiresStraps {
+                        Label("Recoger Straps", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption.bold())
+                            .foregroundStyle(.orange)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.orange.opacity(0.15))
+                            .clipShape(Capsule())
+                    }
                 }
+
                 Spacer()
+
+                Button(action: onRemove) {
+                    Image(systemName: "trash")
+                        .font(.subheadline)
+                        .foregroundStyle(.red.opacity(0.9))
+                        .frame(width: 32, height: 32)
+                        .background(Color.red.opacity(0.12))
+                        .clipShape(Circle())
+                }
+                .accessibilityLabel("Eliminar ejercicio")
             }
 
             // Table Header
             HStack {
                 Text("SERIE")
-                    .frame(width: 40, alignment: .leading)
+                    .frame(width: 40, alignment: .center)
                 Text("ANTERIOR (GHOST)")
                     .frame(maxWidth: .infinity, alignment: .center)
                 Text("KG")
@@ -186,10 +367,11 @@ struct ExerciseCardView: View {
                 Text("REPS")
                     .frame(width: 50, alignment: .center)
                 Text("OK")
-                    .frame(width: 40, alignment: .trailing)
+                    .frame(width: 40, alignment: .center)
             }
             .font(.caption2.bold())
             .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
 
             Divider().background(Color.gray.opacity(0.3))
 
@@ -200,6 +382,22 @@ struct ExerciseCardView: View {
                     onToggle: { onToggleSet(index) },
                     onUpdate: { w, r in onUpdateSet(index, w, r) }
                 )
+            }
+
+            Divider().background(Color.gray.opacity(0.3))
+
+            DisclosureGroup(isExpanded: $notesExpanded) {
+                TextField("Consejos, altura de poleas, agarre...", text: notesBinding, axis: .vertical)
+                    .font(.subheadline)
+                    .foregroundStyle(.white)
+                    .lineLimit(2...6)
+                    .padding(10)
+                    .background(Color(.systemGray6).opacity(0.2))
+                    .cornerRadius(10)
+            } label: {
+                Label("Notas", systemImage: "note.text")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(16)
@@ -230,14 +428,16 @@ struct SetRowView: View {
             // Set Number
             Text("\(set.setNumber)")
                 .font(.subheadline.bold())
-                .foregroundStyle(.secondary)
-                .frame(width: 40, alignment: .leading)
+                .foregroundStyle(set.isCompleted ? Color.green : Color.secondary)
+                .frame(width: 40, alignment: .center)
+                .multilineTextAlignment(.center)
 
             // Ghost Reference
             Text(ghostText)
                 .font(.caption)
                 .foregroundStyle(.secondary.opacity(0.7))
                 .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.center)
 
             // Weight Input
             TextField("0", text: $weightString)
@@ -274,9 +474,15 @@ struct SetRowView: View {
                 Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
                     .foregroundStyle(set.isCompleted ? .green : .gray)
+                    .frame(width: 40, height: 32)
             }
-            .frame(width: 40, alignment: .trailing)
+            .frame(width: 40, alignment: .center)
+            .accessibilityLabel(set.isCompleted ? "Serie completada" : "Marcar serie como completada")
         }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(set.isCompleted ? Color.green.opacity(0.12) : Color.clear)
+        .cornerRadius(8)
     }
 
     private var ghostText: String {

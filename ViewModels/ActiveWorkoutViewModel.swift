@@ -10,9 +10,11 @@ public final class ActiveWorkoutViewModel {
     public var session: WorkoutSession
     public var routine: Routine
     public var activeSets: [UUID: [SetInputState]] = [:]
-    
+    public var structureVersion = 0
+
     // Rest Timer State
     public var isResting = false
+    public var isRestPaused = false
     public var restTimeRemaining = 0
     public var totalRestSeconds = 0
     public var restTargetBpm: Int?
@@ -20,11 +22,28 @@ public final class ActiveWorkoutViewModel {
     public var currentExerciseName = ""
     public var timerEndDate: Date?
     public var isTimerMinimized: Bool = false
-    
+
     private var timerTask: Task<Void, Never>?
     private var bpmObserverTask: Task<Void, Never>?
     private var currentActivity: Activity<WorkoutActivityAttributes>?
     private var cancellables = Set<AnyCancellable>()
+    private var currentRestCondition: RestCondition?
+
+    private var originalRoutineExercises: [RoutineExercise] = []
+    private var originalSnapshots: [RoutineSnapshot] = []
+    private var addedRoutineExerciseIDs: Set<UUID> = []
+    private var removedRoutineExercises: [RoutineExercise] = []
+
+    private struct RoutineSnapshot {
+        let id: UUID
+        let exercise: Exercise?
+        let defaultSets: Int
+        let targetReps: Int
+        let sortOrder: Int
+        let defaultWeight: Double
+        let restSeconds: Int
+        let notes: String
+    }
 
     public struct SetInputState: Identifiable {
         public let id = UUID()
@@ -41,50 +60,170 @@ public final class ActiveWorkoutViewModel {
         self.session = session
         self.routine = routine
         setupInitialSets(modelContext: modelContext)
+        captureOriginalStructure()
         setupBPMObserver()
     }
 
+    // MARK: - Exercise Structure
+
     private func setupInitialSets(modelContext: ModelContext) {
         for routineExercise in routine.exercises {
-            guard let exercise = routineExercise.exercise else { continue }
-            var sets: [SetInputState] = []
-            
-            let exerciseID = exercise.id
-            let descriptor = FetchDescriptor<WorkoutSetLog>(
-                predicate: #Predicate { $0.exercise?.id == exerciseID },
-                sortBy: [SortDescriptor(\.date, order: .reverse)]
-            )
-            
-            let pastLogs = (try? modelContext.fetch(descriptor)) ?? []
-            
-            for i in 1...routineExercise.defaultSets {
-                let matchingLog = pastLogs.indices.contains(i - 1) ? pastLogs[i - 1] : pastLogs.first
-                let ghostW = matchingLog?.weight
-                let ghostR = matchingLog?.reps
-                
-                sets.append(SetInputState(
-                    setNumber: i,
-                    weight: ghostW ?? 0.0,
-                    reps: routineExercise.targetReps,
-                    isCompleted: false,
-                    ghostWeight: ghostW,
-                    ghostReps: ghostR
-                ))
-            }
-            activeSets[routineExercise.id] = sets
+            activeSets[routineExercise.id] = buildSetStates(for: routineExercise, modelContext: modelContext)
         }
     }
+
+    private func buildSetStates(for routineExercise: RoutineExercise, modelContext: ModelContext) -> [SetInputState] {
+        guard let exercise = routineExercise.exercise else { return [] }
+
+        let exerciseID = exercise.id
+        let descriptor = FetchDescriptor<WorkoutSetLog>(
+            predicate: #Predicate { $0.exercise?.id == exerciseID },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+
+        let pastLogs = (try? modelContext.fetch(descriptor)) ?? []
+        var sets: [SetInputState] = []
+
+        for i in 1...max(1, routineExercise.defaultSets) {
+            let matchingLog = pastLogs.indices.contains(i - 1) ? pastLogs[i - 1] : pastLogs.first
+            let ghostW = matchingLog?.weight
+            let ghostR = matchingLog?.reps
+
+            sets.append(SetInputState(
+                setNumber: i,
+                weight: routineExercise.defaultWeight > 0 ? routineExercise.defaultWeight : (ghostW ?? 0.0),
+                reps: routineExercise.targetReps,
+                isCompleted: false,
+                ghostWeight: ghostW,
+                ghostReps: ghostR
+            ))
+        }
+
+        return sets
+    }
+
+    @discardableResult
+    public func addExercise(_ exercise: Exercise, modelContext: ModelContext) -> RoutineExercise {
+        let nextOrder = (routine.exercises.map(\.sortOrder).max() ?? -1) + 1
+        let routineExercise = RoutineExercise(exercise: exercise, sortOrder: nextOrder)
+
+        modelContext.insert(routineExercise)
+        routine.exercises.append(routineExercise)
+        activeSets[routineExercise.id] = buildSetStates(for: routineExercise, modelContext: modelContext)
+        addedRoutineExerciseIDs.insert(routineExercise.id)
+        structureVersion += 1
+        try? modelContext.save()
+
+        return routineExercise
+    }
+
+    public func removeExercise(_ routineExercise: RoutineExercise, modelContext: ModelContext) {
+        guard routine.exercises.contains(where: { $0.id == routineExercise.id }) else { return }
+
+        routine.exercises.removeAll { $0.id == routineExercise.id }
+        activeSets.removeValue(forKey: routineExercise.id)
+
+        if addedRoutineExerciseIDs.contains(routineExercise.id) {
+            addedRoutineExerciseIDs.remove(routineExercise.id)
+            modelContext.delete(routineExercise)
+        } else if !removedRoutineExercises.contains(where: { $0.id == routineExercise.id }) {
+            removedRoutineExercises.append(routineExercise)
+        }
+
+        normalizeSortOrder()
+        structureVersion += 1
+        try? modelContext.save()
+    }
+
+    private func normalizeSortOrder() {
+        for (index, routineExercise) in routine.exercises.sorted(by: { $0.sortOrder < $1.sortOrder }).enumerated() {
+            routineExercise.sortOrder = index
+        }
+    }
+
+    private func captureOriginalStructure() {
+        originalRoutineExercises = routine.exercises.sorted { $0.sortOrder < $1.sortOrder }
+        originalSnapshots = originalRoutineExercises.map {
+            RoutineSnapshot(
+                id: $0.id,
+                exercise: $0.exercise,
+                defaultSets: $0.defaultSets,
+                targetReps: $0.targetReps,
+                sortOrder: $0.sortOrder,
+                defaultWeight: $0.defaultWeight,
+                restSeconds: $0.restSeconds,
+                notes: $0.notes
+            )
+        }
+    }
+
+    public var hasRoutineChanged: Bool {
+        let current = routine.exercises.sorted { $0.sortOrder < $1.sortOrder }
+        guard current.count == originalSnapshots.count else { return true }
+
+        let snapshotsByID = Dictionary(uniqueKeysWithValues: originalSnapshots.map { ($0.id, $0) })
+
+        for routineExercise in current {
+            guard let snapshot = snapshotsByID[routineExercise.id] else { return true }
+            if routineExercise.exercise?.id != snapshot.exercise?.id ||
+                routineExercise.defaultSets != snapshot.defaultSets ||
+                routineExercise.targetReps != snapshot.targetReps ||
+                routineExercise.sortOrder != snapshot.sortOrder ||
+                routineExercise.defaultWeight != snapshot.defaultWeight ||
+                routineExercise.restSeconds != snapshot.restSeconds ||
+                routineExercise.notes != snapshot.notes {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private func restoreOriginalStructure(modelContext: ModelContext) {
+        let currentExercises = routine.exercises
+        for routineExercise in currentExercises where addedRoutineExerciseIDs.contains(routineExercise.id) {
+            modelContext.delete(routineExercise)
+            activeSets.removeValue(forKey: routineExercise.id)
+        }
+
+        for snapshot in originalSnapshots {
+            guard let routineExercise = originalRoutineExercises.first(where: { $0.id == snapshot.id }) else { continue }
+            routineExercise.exercise = snapshot.exercise
+            routineExercise.defaultSets = snapshot.defaultSets
+            routineExercise.targetReps = snapshot.targetReps
+            routineExercise.sortOrder = snapshot.sortOrder
+            routineExercise.defaultWeight = snapshot.defaultWeight
+            routineExercise.restSeconds = snapshot.restSeconds
+            routineExercise.notes = snapshot.notes
+        }
+
+        routine.exercises = originalRoutineExercises.sorted { $0.sortOrder < $1.sortOrder }
+        addedRoutineExerciseIDs.removeAll()
+        removedRoutineExercises.removeAll()
+        structureVersion += 1
+    }
+
+    private func commitRoutineChanges(modelContext: ModelContext) {
+        let currentIDs = Set(routine.exercises.map(\.id))
+        for routineExercise in removedRoutineExercises where !currentIDs.contains(routineExercise.id) {
+            modelContext.delete(routineExercise)
+        }
+        removedRoutineExercises.removeAll()
+        addedRoutineExerciseIDs.removeAll()
+    }
+
+    // MARK: - Sets
 
     public func toggleSetCompletion(for routineExerciseID: UUID, setIndex: Int, modelContext: ModelContext) {
         guard var sets = activeSets[routineExerciseID], sets.indices.contains(setIndex) else { return }
         sets[setIndex].isCompleted.toggle()
         activeSets[routineExerciseID] = sets
-        
+
         if sets[setIndex].isCompleted {
             let targetSet = sets[setIndex]
             let routineExercise = routine.exercises.first(where: { $0.id == routineExerciseID })
             let exercise = routineExercise?.exercise
-            
+
             let log = WorkoutSetLog(
                 date: Date(),
                 weight: targetSet.weight,
@@ -97,94 +236,171 @@ public final class ActiveWorkoutViewModel {
             session.setsCompleted.append(log)
             session.totalVolumeKg += (targetSet.weight * Double(targetSet.reps))
             try? modelContext.save()
-            
-            if let restCondition = exercise?.defaultRestCondition, let exerciseName = exercise?.name {
-                currentExerciseName = exerciseName
-                startRest(with: restCondition, exerciseName: exerciseName)
+
+            if let exercise, let routineExercise {
+                let condition: RestCondition
+                if case .timer = exercise.defaultRestCondition {
+                    condition = .timer(seconds: max(0, routineExercise.restSeconds))
+                } else {
+                    condition = exercise.defaultRestCondition
+                }
+                currentExerciseName = exercise.name
+                startRest(with: condition, exerciseName: exercise.name)
             }
         }
     }
 
     // MARK: - Rest Timer & BPM Drop Logic
+
     private func startRest(with condition: RestCondition, exerciseName: String) {
         stopRest()
         isResting = true
-        
-        let duration: Int
-        if case let .timer(seconds) = condition {
-            duration = seconds
-        } else {
-            duration = 0
-        }
-        
-        timerEndDate = Date().addingTimeInterval(Double(duration))
-        startLiveActivity(exerciseName: exerciseName, restCondition: condition, timerEndDate: timerEndDate!)
+        isRestPaused = false
+        currentRestCondition = condition
+        currentExerciseName = exerciseName
 
         switch condition {
         case .timer(let seconds):
             totalRestSeconds = seconds
             restTimeRemaining = seconds
             currentRestModeTitle = "Descanso (\(seconds)s)"
-            
-            timerTask = Task {
-                while let endDate = timerEndDate {
-                    let remaining = Int(endDate.timeIntervalSinceNow)
-                    restTimeRemaining = max(0, remaining)
-                    updateLiveActivity()
-                    
-                    if restTimeRemaining <= 0 {
-                        finishRest()
-                        break
-                    }
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
-                    if Task.isCancelled { break }
-                }
-            }
+            timerEndDate = Date().addingTimeInterval(Double(seconds))
+            startLiveActivity(exerciseName: exerciseName, timerEndDate: timerEndDate!)
+            AudioAlertService.shared.scheduleRestFinishedNotification(after: seconds)
+            startTimerCountdown()
 
         case .bpmDrop(let targetBpm):
             restTargetBpm = targetBpm
             currentRestModeTitle = "Esperando recuperación (< \(targetBpm) BPM)"
-            
-            bpmObserverTask = Task {
-                while isResting {
-                    updateLiveActivity()
-                    let currentBPM = BPMManager.shared.currentBPM
-                    if currentBPM > 0, currentBPM <= targetBpm {
-                        finishRest()
-                        break
-                    }
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
-                    if Task.isCancelled { break }
+            timerEndDate = Date()
+            startLiveActivity(exerciseName: exerciseName, timerEndDate: timerEndDate!)
+            startBpmRecoveryObserver(targetBpm: targetBpm)
+        }
+    }
+
+    private func startTimerCountdown() {
+        timerTask?.cancel()
+        timerTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, !self.isRestPaused, let endDate = self.timerEndDate else { return }
+                let remaining = Int(ceil(endDate.timeIntervalSinceNow))
+                self.restTimeRemaining = max(0, remaining)
+                self.updateLiveActivity()
+
+                if remaining <= 0 {
+                    self.finishRest()
+                    return
                 }
+
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+        }
+    }
+
+    private func startBpmRecoveryObserver(targetBpm: Int) {
+        bpmObserverTask?.cancel()
+        bpmObserverTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, self.isResting, !self.isRestPaused else { return }
+                self.updateLiveActivity()
+
+                let currentBPM = BPMManager.shared.currentBPM
+                if currentBPM > 0, currentBPM <= targetBpm {
+                    self.finishRest()
+                    return
+                }
+
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
         }
     }
 
     public func add10Seconds() {
-        guard let endDate = timerEndDate else { return }
-        let newEndDate = endDate.addingTimeInterval(10)
-        timerEndDate = newEndDate
-        totalRestSeconds += 10
-        restTimeRemaining = Int(newEndDate.timeIntervalSinceNow)
-        updateLiveActivity()
+        guard isResting, let condition = currentRestCondition, case .timer = condition else { return }
+
+        if isRestPaused {
+            restTimeRemaining += 10
+            totalRestSeconds += 10
+            timerEndDate = Date().addingTimeInterval(Double(restTimeRemaining))
+        } else if let endDate = timerEndDate {
+            let newEndDate = endDate.addingTimeInterval(10)
+            timerEndDate = newEndDate
+            totalRestSeconds += 10
+            restTimeRemaining = max(0, Int(ceil(newEndDate.timeIntervalSinceNow)))
+            updateLiveActivity()
+            AudioAlertService.shared.scheduleRestFinishedNotification(after: restTimeRemaining)
+        }
     }
 
     public func sub10Seconds() {
-        guard let endDate = timerEndDate else { return }
-        let newEndDate = endDate.addingTimeInterval(-10)
-        let remaining = Int(newEndDate.timeIntervalSinceNow)
-        if remaining <= 0 {
-            finishRest()
-        } else {
-            timerEndDate = newEndDate
+        guard isResting, let condition = currentRestCondition, case .timer = condition else { return }
+
+        if isRestPaused {
+            restTimeRemaining -= 10
             totalRestSeconds = max(10, totalRestSeconds - 10)
-            restTimeRemaining = remaining
-            updateLiveActivity()
+            if restTimeRemaining <= 0 {
+                finishRest()
+            } else {
+                timerEndDate = Date().addingTimeInterval(Double(restTimeRemaining))
+            }
+        } else if let endDate = timerEndDate {
+            let newEndDate = endDate.addingTimeInterval(-10)
+            let remaining = Int(ceil(newEndDate.timeIntervalSinceNow))
+
+            if remaining <= 0 {
+                finishRest()
+            } else {
+                timerEndDate = newEndDate
+                totalRestSeconds = max(10, totalRestSeconds - 10)
+                restTimeRemaining = remaining
+                updateLiveActivity()
+                AudioAlertService.shared.scheduleRestFinishedNotification(after: remaining)
+            }
+        }
+    }
+
+    public func pauseRest() {
+        guard isResting, !isRestPaused else { return }
+
+        isRestPaused = true
+        timerTask?.cancel()
+        timerTask = nil
+        bpmObserverTask?.cancel()
+        bpmObserverTask = nil
+
+        if let condition = currentRestCondition, case .timer = condition, let endDate = timerEndDate {
+            restTimeRemaining = max(0, Int(ceil(endDate.timeIntervalSinceNow)))
+            timerEndDate = Date().addingTimeInterval(Double(restTimeRemaining))
+        }
+
+        AudioAlertService.shared.cancelRestFinishedNotification()
+        endLiveActivity()
+    }
+
+    public func resumeRest() {
+        guard isResting, isRestPaused, let condition = currentRestCondition else { return }
+
+        isRestPaused = false
+        switch condition {
+        case .timer:
+            guard restTimeRemaining > 0 else {
+                finishRest()
+                return
+            }
+            timerEndDate = Date().addingTimeInterval(Double(restTimeRemaining))
+            startLiveActivity(exerciseName: currentExerciseName, timerEndDate: timerEndDate!)
+            AudioAlertService.shared.scheduleRestFinishedNotification(after: restTimeRemaining)
+            startTimerCountdown()
+
+        case .bpmDrop(let targetBpm):
+            timerEndDate = Date()
+            startLiveActivity(exerciseName: currentExerciseName, timerEndDate: timerEndDate!)
+            startBpmRecoveryObserver(targetBpm: targetBpm)
         }
     }
 
     public func skipRest() {
-        finishRest()
+        stopRest()
     }
 
     private func finishRest() {
@@ -198,16 +414,68 @@ public final class ActiveWorkoutViewModel {
         bpmObserverTask?.cancel()
         bpmObserverTask = nil
         isResting = false
+        isRestPaused = false
         restTargetBpm = nil
         timerEndDate = nil
+        currentRestCondition = nil
+        AudioAlertService.shared.cancelRestFinishedNotification()
         endLiveActivity()
     }
 
+    // MARK: - Finish / Cancel
+
+    @discardableResult
     public func finishWorkout(modelContext: ModelContext) -> WorkoutSession {
         stopRest()
         session.endDate = Date()
         try? modelContext.save()
         return session
+    }
+
+    @discardableResult
+    public func finishWorkoutReplacingRoutine(modelContext: ModelContext) -> WorkoutSession {
+        commitRoutineChanges(modelContext: modelContext)
+        return finishWorkout(modelContext: modelContext)
+    }
+
+    @discardableResult
+    public func finishWorkoutHistoryOnly(modelContext: ModelContext) -> WorkoutSession {
+        restoreOriginalStructure(modelContext: modelContext)
+        return finishWorkout(modelContext: modelContext)
+    }
+
+    @discardableResult
+    public func finishWorkoutSavingAsNewRoutine(named name: String, modelContext: ModelContext) -> WorkoutSession {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let routineName = trimmedName.isEmpty ? "\(routine.name) (modificada)" : trimmedName
+
+        let copiedExercises = routine.exercises
+            .sorted { $0.sortOrder < $1.sortOrder }
+            .map { routineExercise in
+                RoutineExercise(
+                    exercise: routineExercise.exercise,
+                    defaultSets: routineExercise.defaultSets,
+                    targetReps: routineExercise.targetReps,
+                    sortOrder: routineExercise.sortOrder,
+                    defaultWeight: routineExercise.defaultWeight,
+                    restSeconds: routineExercise.restSeconds,
+                    notes: routineExercise.notes
+                )
+            }
+
+        copiedExercises.forEach { modelContext.insert($0) }
+        let newRoutine = Routine(name: routineName, isTemplate: true, exercises: copiedExercises)
+        modelContext.insert(newRoutine)
+        restoreOriginalStructure(modelContext: modelContext)
+        try? modelContext.save()
+        return finishWorkout(modelContext: modelContext)
+    }
+
+    public func cancelWorkout(modelContext: ModelContext) {
+        stopRest()
+        restoreOriginalStructure(modelContext: modelContext)
+        modelContext.delete(session)
+        try? modelContext.save()
     }
 
     // MARK: - BPM Observer
@@ -224,18 +492,17 @@ public final class ActiveWorkoutViewModel {
     }
 
     // MARK: - ActivityKit (Live Activities / Dynamic Island)
-    private func startLiveActivity(exerciseName: String, restCondition: RestCondition, timerEndDate: Date) {
+    private func startLiveActivity(exerciseName: String, timerEndDate: Date) {
         // Finalizar actividades previas antes de iniciar una nueva
         for activity in Activity<WorkoutActivityAttributes>.activities {
             Task { await activity.end(dismissalPolicy: .immediate) }
         }
-        
+
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        
+
         let currentSetIndex = session.setsCompleted.count
-        
         let attributes = WorkoutActivityAttributes(workoutName: routine.name)
-        
+
         let state = WorkoutActivityAttributes.ContentState(
             timerEndDate: timerEndDate,
             sessionStartDate: session.startDate,
@@ -243,9 +510,9 @@ public final class ActiveWorkoutViewModel {
             exerciseName: exerciseName,
             currentSet: currentSetIndex + 1
         )
-        
+
         let content = ActivityContent(state: state, staleDate: timerEndDate)
-        
+
         do {
             currentActivity = try Activity<WorkoutActivityAttributes>.request(
                 attributes: attributes,
@@ -263,10 +530,12 @@ public final class ActiveWorkoutViewModel {
     }
 
     private func updateLiveActivity(bpm: Int) {
-        guard let activity = Activity<WorkoutActivityAttributes>.activities.first, let endDate = timerEndDate else { return }
-        
+        guard isResting, !isRestPaused,
+              let activity = Activity<WorkoutActivityAttributes>.activities.first,
+              let endDate = timerEndDate else { return }
+
         let currentSetIndex = session.setsCompleted.count
-        
+
         let state = WorkoutActivityAttributes.ContentState(
             timerEndDate: endDate,
             sessionStartDate: session.startDate,
@@ -274,7 +543,7 @@ public final class ActiveWorkoutViewModel {
             exerciseName: currentExerciseName,
             currentSet: currentSetIndex + 1
         )
-        
+
         Task {
             await activity.update(ActivityContent(state: state, staleDate: endDate))
         }
@@ -282,10 +551,10 @@ public final class ActiveWorkoutViewModel {
 
     private func endLiveActivity() {
         guard let activity = currentActivity else { return }
+        currentActivity = nil
         let finalState = activity.content.state
         Task {
             await activity.end(ActivityContent(state: finalState, staleDate: nil), dismissalPolicy: .immediate)
-            currentActivity = nil
         }
     }
 }
