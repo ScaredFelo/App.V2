@@ -142,8 +142,8 @@ extension BPMManager: CBCentralManagerDelegate, CBPeripheralDelegate {
     nonisolated public func centralManagerDidUpdateState(_ central: CBCentralManager) {
         Task { @MainActor in
             // CORRECCIÓN: Iniciar escaneo automáticamente al estar listo
-            if central.state == .poweredOn, self.shared.dataSource == .bluetooth {
-                self.shared.startBluetoothScanning()
+            if central.state == .poweredOn, BPMManager.shared.dataSource == .bluetooth {
+                BPMManager.shared.startBluetoothScanning()
             }
         }
     }
@@ -171,8 +171,8 @@ extension BPMManager: CBCentralManagerDelegate, CBPeripheralDelegate {
             isConnected = false
             currentBPM = nil
             // CORRECCIÓN: Reconexión automática al desconectar
-            if self.shared.dataSource == .bluetooth {
-                self.shared.startBluetoothScanning()
+            if BPMManager.shared.dataSource == .bluetooth {
+                BPMManager.shared.startBluetoothScanning()
             }
         }
     }
@@ -195,7 +195,7 @@ extension BPMManager: CBCentralManagerDelegate, CBPeripheralDelegate {
         guard characteristic.uuid == heartRateMeasurementCharacteristicUUID, let data = characteristic.value else { return }
         let bpm = parseHeartRate(from: data)
         Task { @MainActor in
-            self.shared.currentBPM = bpm
+            BPMManager.shared.currentBPM = bpm
         }
     }
 
