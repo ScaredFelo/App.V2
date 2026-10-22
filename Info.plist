@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSHealthShareUsageDescription</key>
+    <string>App.gym requiere acceso a Salud para monitorizar tus pulsaciones durante los entrenamientos.</string>
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>App.gym utiliza Salud para guardar tus sesiones de entrenamiento.</string>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>App.gym utiliza Bluetooth para conectar bandas de frecuencia cardíaca y monitorizar tus pulsaciones.</string>
+    <key>NSBluetoothPeripheralUsageDescription</key>
+    <string>App.gym utiliza Bluetooth para conectar sensores de ritmo cardíaco externos.</string>
+</dict>
+</plist>
