@@ -28,7 +28,7 @@ public final class Exercise {
     @Transient
     public var defaultRestCondition: RestCondition {
         get {
-            try? JSONDecoder().decode(RestCondition.self, from: defaultRestConditionData) ?? .timer(seconds: 90)
+            (try? JSONDecoder().decode(RestCondition.self, from: defaultRestConditionData)) ?? .timer(seconds: 90)
         }
         set {
             defaultRestConditionData = (try? JSONEncoder().encode(newValue)) ?? Data()

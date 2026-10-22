@@ -12,13 +12,13 @@ public struct WorkoutActivityAttributes: ActivityAttributes {
         public init(
             remainingSeconds: Int,
             currentBPM: Int,
-            targetBpm: Int,
+            targetBPM: Int,
             exerciseName: String,
             isBpmMode: Bool
         ) {
             self.remainingSeconds = remainingSeconds
             self.currentBPM = currentBPM
-            self.targetBPM = targetBpm
+            self.targetBPM = targetBPM
             self.exerciseName = exerciseName
             self.isBpmMode = isBpmMode
         }

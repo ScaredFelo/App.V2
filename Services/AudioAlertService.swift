@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import AudioToolbox
+import UIKit
 
 @MainActor
 public final class AudioAlertService {
