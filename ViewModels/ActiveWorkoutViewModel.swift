@@ -211,31 +211,22 @@ public final class ActiveWorkoutViewModel {
     private func startLiveActivity(exerciseName: String, restCondition: RestCondition, timerEndDate: Date) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         
-        let isBpm: Bool
-        let targetBpm: Int
+        // Asumiendo que podemos obtener el índice actual del ejercicio o serie para el "currentSet"
+        // Para simplificar, usamos el primer set completado o un contador.
+        let currentSetIndex = session.setsCompleted.count
         
-        switch restCondition {
-        case .timer:
-            isBpm = false
-            targetBpm = 0
-        case .bpmDrop(let bpm):
-            isBpm = true
-            targetBpm = bpm
-        }
+        let attributes = WorkoutActivityAttributes(workoutName: routine.name)
         
-        let attributes = WorkoutActivityAttributes(routineName: routine.name)
-        let initialContentState = WorkoutActivityAttributes.ContentState(
+        let contentState = WorkoutActivityAttributes.ContentState(
             timerEndDate: timerEndDate,
-            currentBPM: BPMManager.shared.currentBPM ?? 0,
-            targetBPM: targetBpm,
             exerciseName: exerciseName,
-            isBpmMode: isBpm
+            currentSet: currentSetIndex + 1
         )
         
         do {
             currentActivity = try Activity.request(
                 attributes: attributes,
-                content: .init(state: initialContentState, staleDate: nil),
+                content: .init(state: contentState, staleDate: nil),
                 pushType: nil
             )
         } catch {
@@ -245,15 +236,13 @@ public final class ActiveWorkoutViewModel {
 
     private func updateLiveActivity() {
         guard let activity = currentActivity, let endDate = timerEndDate else { return }
-        let isBpm = restTargetBpm != nil
-        let target = restTargetBpm ?? 0
+        
+        let currentSetIndex = session.setsCompleted.count
         
         let state = WorkoutActivityAttributes.ContentState(
             timerEndDate: endDate,
-            currentBPM: BPMManager.shared.currentBPM ?? 0,
-            targetBPM: target,
             exerciseName: currentExerciseName,
-            isBpmMode: isBpm
+            currentSet: currentSetIndex + 1
         )
         
         Task {
