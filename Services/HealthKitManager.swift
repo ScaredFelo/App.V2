@@ -8,7 +8,6 @@ class HealthKitManager: ObservableObject {
     
     private let healthStore = HKHealthStore()
     private var workoutSession: HKWorkoutSession?
-    private var liveBuilder: HKLiveWorkoutBuilder?
     
     func solicitarPermisoHealthKit(completion: @escaping (Bool) -> Void) {
         guard HKHealthStore.isHealthDataAvailable() else {
@@ -28,39 +27,32 @@ class HealthKitManager: ObservableObject {
             DispatchQueue.main.async {
                 self?.isAuthorized = success
                 if success {
-                    self?.iniciarWorkoutSession()
+                    self?.iniciarWorkoutSessionIOS()
                 }
                 completion(success)
             }
         }
     }
     
-    func iniciarWorkoutSession() {
+    func iniciarWorkoutSessionIOS() {
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .traditionalStrengthTraining
         configuration.locationType = .indoor
         
         do {
+            // Inicializador compatible con iOS 17+
             workoutSession = try HKWorkoutSession(healthStore: healthStore, configuration: configuration)
-            liveBuilder = workoutSession?.associatedWorkoutBuilder()
-            
-            liveBuilder?.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: configuration)
-            
             workoutSession?.startActivity(with: Date())
-            liveBuilder?.beginCollection(withStart: Date()) { [weak self] success, error in
-                if success {
-                    self?.iniciarObservacionBPM()
-                }
-            }
+            
+            self.iniciarObservacionBPM()
         } catch {
-            print("Error al iniciar HKWorkoutSession: \(error.localizedDescription)")
+            print("Error al iniciar HKWorkoutSession en iOS: \(error.localizedDescription)")
             iniciarObservacionBPM()
         }
     }
     
     func detenerWorkoutSession() {
         workoutSession?.end()
-        liveBuilder?.endCollection(withEnd: Date()) { _, _ in }
     }
     
     func iniciarObservacionBPM() {
@@ -98,7 +90,7 @@ class HealthKitManager: ObservableObject {
         guard let tipoRitmoCardiaco = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
         
-        let query = HKSampleQuery(sampleType: tipoRitmoCardiaco, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, results, error in
+        let query = HKSampleQuery(sampleType: tipoRitmoCardiaco, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, results, _ in
             guard let muestra = results?.first as? HKQuantitySample else {
                 completion(0)
                 return
