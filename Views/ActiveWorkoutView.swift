@@ -15,11 +15,14 @@ public struct ActiveWorkoutView: View {
     @State private var pendingNewRoutinePromptID: UUID?
     @State private var newRoutineName = ""
 
+    private let horizontalPadding: CGFloat = 16
+
     public init(session: WorkoutSession, routine: Routine, modelContext: ModelContext) {
         _viewModel = State(initialValue: ActiveWorkoutViewModel(session: session, routine: routine, modelContext: modelContext))
     }
 
     public var body: some View {
+        GeometryReader { geometry in
         ZStack(alignment: .bottom) {
             Color.black.ignoresSafeArea()
 
@@ -102,9 +105,11 @@ public struct ActiveWorkoutView: View {
                     Color.clear
                         .frame(height: 80)
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, horizontalPadding)
                 .padding(.vertical, 20)
+                .frame(width: geometry.size.width)
             }
+            .frame(width: geometry.size.width)
 
             // Temporizador maximizado
             if viewModel.isResting && !viewModel.isTimerMinimized {
@@ -152,11 +157,12 @@ public struct ActiveWorkoutView: View {
                     onSub10: { viewModel.sub10Seconds() },
                     onSkip: { viewModel.skipRest() }
                 )
-                .padding(.horizontal, 16)
+                .padding(.horizontal, horizontalPadding)
+                .frame(width: geometry.size.width)
                 .padding(.bottom, 8)
-                .frame(maxWidth: .infinity)
                 .zIndex(1)
             }
+        }
         }
         .onAppear {
             BPMManager.shared.startScanning()
@@ -379,6 +385,10 @@ struct ExerciseCardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemGray6).opacity(0.1))
         .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
     }
 }
 
