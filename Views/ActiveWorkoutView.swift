@@ -64,17 +64,31 @@ public struct ActiveWorkoutView: View {
                 }
             }
 
-            // Rest Overlay Banner with Circular Timer
+                // Rest Overlay Banner with Circular Timer
             if viewModel.isResting {
                 ZStack {
                     Color.black.opacity(0.85).ignoresSafeArea()
-                    CircularTimerView(
-                        timeRemaining: viewModel.restTimeRemaining,
-                        totalSeconds: viewModel.totalRestSeconds,
-                        onAdd10: { viewModel.add10Seconds() },
-                        onSub10: { viewModel.sub10Seconds() },
-                        onSkip: { viewModel.skipRest() }
-                    )
+                    if !viewModel.isTimerMinimized {
+                        CircularTimerView(
+                            timeRemaining: viewModel.restTimeRemaining,
+                            totalSeconds: viewModel.totalRestSeconds,
+                            onAdd10: { viewModel.add10Seconds() },
+                            onSub10: { viewModel.sub10Seconds() },
+                            onSkip: { viewModel.skipRest() },
+                            onMinimize: { viewModel.isTimerMinimized = true }
+                        )
+                    } else {
+                        VStack {
+                            Spacer()
+                            MinimizedTimerView(
+                                timeRemaining: viewModel.restTimeRemaining,
+                                onExpand: { viewModel.isTimerMinimized = false },
+                                onAdd10: { viewModel.add10Seconds() },
+                                onSkip: { viewModel.skipRest() }
+                            )
+                            .padding(.bottom, 30)
+                        }
+                    }
                 }
                 .transition(.opacity)
                 .animation(.easeInOut, value: viewModel.isResting)

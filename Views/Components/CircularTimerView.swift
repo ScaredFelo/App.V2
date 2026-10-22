@@ -6,6 +6,7 @@ public struct CircularTimerView: View {
     public let onAdd10: () -> Void
     public let onSub10: () -> Void
     public let onSkip: () -> Void
+    public let onMinimize: () -> Void
 
     private var progress: Double {
         guard totalSeconds > 0 else { return 0 }
@@ -17,13 +18,15 @@ public struct CircularTimerView: View {
         totalSeconds: Int,
         onAdd10: @escaping () -> Void,
         onSub10: @escaping () -> Void,
-        onSkip: @escaping () -> Void
+        onSkip: @escaping () -> Void,
+        onMinimize: @escaping () -> Void
     ) {
         self.timeRemaining = timeRemaining
         self.totalSeconds = totalSeconds
         self.onAdd10 = onAdd10
         self.onSub10 = onSub10
         self.onSkip = onSkip
+        self.onMinimize = onMinimize
     }
 
     public var body: some View {
@@ -73,6 +76,9 @@ public struct CircularTimerView: View {
                 }
             }
 
+    public let onMinimize: () -> Void
+
+    // ... inside body ...
             // Skip Button
             Button(action: onSkip) {
                 Text("Omitir Descanso")
@@ -85,6 +91,14 @@ public struct CircularTimerView: View {
             }
         }
         .padding(24)
+        .overlay(alignment: .topTrailing) {
+            Button(action: onMinimize) {
+                Image(systemName: "chevron.down")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+            }
+            .padding()
+        }
         .background(Color.black.opacity(0.95))
         .cornerRadius(24)
         .padding(.horizontal, 20)

@@ -19,6 +19,7 @@ public final class ActiveWorkoutViewModel {
     public var currentRestModeTitle = ""
     public var currentExerciseName = ""
     public var timerEndDate: Date?
+    public var isTimerMinimized: Bool = false
     
     private var timerTask: Task<Void, Never>?
     private var bpmObserverTask: Task<Void, Never>?
@@ -106,13 +107,21 @@ public final class ActiveWorkoutViewModel {
     private func startRest(with condition: RestCondition, exerciseName: String) {
         stopRest()
         isResting = true
-        startLiveActivity(exerciseName: exerciseName, restCondition: condition)
+        
+        let duration: Int
+        if case let .timer(seconds) = condition {
+            duration = seconds
+        } else {
+            duration = 0
+        }
+        
+        timerEndDate = Date().addingTimeInterval(Double(duration))
+        startLiveActivity(exerciseName: exerciseName, restCondition: condition, timerEndDate: timerEndDate!)
 
         switch condition {
         case .timer(let seconds):
             totalRestSeconds = seconds
             restTimeRemaining = seconds
-            timerEndDate = Date().addingTimeInterval(Double(seconds))
             currentRestModeTitle = "Descanso (\(seconds)s)"
             
             timerTask = Task {
@@ -199,27 +208,24 @@ public final class ActiveWorkoutViewModel {
     }
 
     // MARK: - ActivityKit (Live Activities / Dynamic Island)
-    private func startLiveActivity(exerciseName: String, restCondition: RestCondition) {
+    private func startLiveActivity(exerciseName: String, restCondition: RestCondition, timerEndDate: Date) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         
         let isBpm: Bool
         let targetBpm: Int
-        let initialSecs: Int
         
         switch restCondition {
-        case .timer(let seconds):
+        case .timer:
             isBpm = false
             targetBpm = 0
-            initialSecs = seconds
         case .bpmDrop(let bpm):
             isBpm = true
             targetBpm = bpm
-            initialSecs = 0
         }
         
         let attributes = WorkoutActivityAttributes(routineName: routine.name)
         let initialContentState = WorkoutActivityAttributes.ContentState(
-            remainingSeconds: initialSecs,
+            timerEndDate: timerEndDate,
             currentBPM: BPMManager.shared.currentBPM ?? 0,
             targetBPM: targetBpm,
             exerciseName: exerciseName,
@@ -238,12 +244,12 @@ public final class ActiveWorkoutViewModel {
     }
 
     private func updateLiveActivity() {
-        guard let activity = currentActivity else { return }
+        guard let activity = currentActivity, let endDate = timerEndDate else { return }
         let isBpm = restTargetBpm != nil
         let target = restTargetBpm ?? 0
         
         let state = WorkoutActivityAttributes.ContentState(
-            remainingSeconds: restTimeRemaining,
+            timerEndDate: endDate,
             currentBPM: BPMManager.shared.currentBPM ?? 0,
             targetBPM: target,
             exerciseName: currentExerciseName,

@@ -3,20 +3,20 @@ import ActivityKit
 
 public struct WorkoutActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
-        public var remainingSeconds: Int
+        public var timerEndDate: Date
         public var currentBPM: Int
         public var targetBPM: Int
         public var exerciseName: String
         public var isBpmMode: Bool
 
         public init(
-            remainingSeconds: Int,
+            timerEndDate: Date,
             currentBPM: Int,
             targetBPM: Int,
             exerciseName: String,
             isBpmMode: Bool
         ) {
-            self.remainingSeconds = remainingSeconds
+            self.timerEndDate = timerEndDate
             self.currentBPM = currentBPM
             self.targetBPM = targetBPM
             self.exerciseName = exerciseName
