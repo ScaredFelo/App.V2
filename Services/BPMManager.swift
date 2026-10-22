@@ -23,6 +23,7 @@ public final class BPMManager: NSObject {
     public var isScanning = false
     public var isConnected = false
     public var peripheralName: String?
+    public var statusText: String = "Sin pulso" // Añadido
 
     // HealthKit
     private let healthStore = HKHealthStore()
@@ -130,9 +131,11 @@ public final class BPMManager: NSObject {
         // CORRECCIÓN: Asegurar estado .poweredOn antes de escanear
         guard centralManager.state == .poweredOn else {
             isScanning = false
+            statusText = "Bluetooth no listo"
             return
         }
         isScanning = true
+        statusText = "Buscando..."
         centralManager.scanForPeripherals(withServices: [heartRateServiceUUID], options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
     }
 }
@@ -156,6 +159,7 @@ extension BPMManager: CBCentralManagerDelegate, CBPeripheralDelegate {
             peripheral.delegate = self
             centralManager.connect(peripheral, options: nil)
             peripheralName = peripheral.name ?? "Dispositivo HR"
+            BPMManager.shared.statusText = "Conectando..."
         }
     }
 
@@ -163,6 +167,7 @@ extension BPMManager: CBCentralManagerDelegate, CBPeripheralDelegate {
         Task { @MainActor in
             isConnected = true
             peripheral.discoverServices([heartRateServiceUUID])
+            BPMManager.shared.statusText = "Conectado"
         }
     }
 
@@ -170,6 +175,7 @@ extension BPMManager: CBCentralManagerDelegate, CBPeripheralDelegate {
         Task { @MainActor in
             isConnected = false
             currentBPM = nil
+            BPMManager.shared.statusText = "Sin pulso"
             // CORRECCIÓN: Reconexión automática al desconectar
             if BPMManager.shared.dataSource == .bluetooth {
                 BPMManager.shared.startBluetoothScanning()
@@ -192,10 +198,29 @@ extension BPMManager: CBCentralManagerDelegate, CBPeripheralDelegate {
     }
 
     nonisolated public func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-        guard characteristic.uuid == heartRateMeasurementCharacteristicUUID, let data = characteristic.value else { return }
-        let bpm = parseHeartRate(from: data)
-        Task { @MainActor in
-            BPMManager.shared.currentBPM = bpm
+        guard let data = characteristic.value, !data.isEmpty else { return }
+        
+        let buffer = [UInt8](data)
+        let flags = buffer[0]
+        let isHRValue16Bit = (flags & 0x01) != 0
+        
+        var bpm: Int = 0
+        if isHRValue16Bit {
+            if buffer.count >= 3 {
+                bpm = Int(buffer[1]) | (Int(buffer[2]) << 8)
+            }
+        } else {
+            if buffer.count >= 2 {
+                bpm = Int(buffer[1])
+            }
+        }
+        
+        if bpm > 0 {
+            Task { @MainActor in
+                BPMManager.shared.currentBPM = bpm
+                BPMManager.shared.isConnected = true
+                BPMManager.shared.statusText = "\(bpm) BPM"
+            }
         }
     }
 

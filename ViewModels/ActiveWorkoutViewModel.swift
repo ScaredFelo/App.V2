@@ -209,28 +209,34 @@ public final class ActiveWorkoutViewModel {
 
     // MARK: - ActivityKit (Live Activities / Dynamic Island)
     private func startLiveActivity(exerciseName: String, restCondition: RestCondition, timerEndDate: Date) {
+        // Finalizar actividades previas antes de iniciar una nueva
+        for activity in Activity<WorkoutActivityAttributes>.activities {
+            Task { await activity.end(dismissalPolicy: .immediate) }
+        }
+        
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         
-        // Asumiendo que podemos obtener el índice actual del ejercicio o serie para el "currentSet"
-        // Para simplificar, usamos el primer set completado o un contador.
         let currentSetIndex = session.setsCompleted.count
         
         let attributes = WorkoutActivityAttributes(workoutName: routine.name)
         
-        let contentState = WorkoutActivityAttributes.ContentState(
+        let state = WorkoutActivityAttributes.ContentState(
             timerEndDate: timerEndDate,
             exerciseName: exerciseName,
             currentSet: currentSetIndex + 1
         )
         
+        let content = ActivityContent(state: state, staleDate: timerEndDate)
+        
         do {
-            currentActivity = try Activity.request(
+            currentActivity = try Activity<WorkoutActivityAttributes>.request(
                 attributes: attributes,
-                content: .init(state: contentState, staleDate: nil),
+                content: content,
                 pushType: nil
             )
+            print("Live Activity iniciada con éxito")
         } catch {
-            print("Failed to start Live Activity: \(error)")
+            print("Error iniciando Live Activity: \(error.localizedDescription)")
         }
     }
 

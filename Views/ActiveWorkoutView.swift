@@ -118,9 +118,13 @@ public struct ActiveWorkoutView: View {
 
             Spacer()
 
-            // Live BPM Pill with tap to reconnect
+            // Live BPM Pill with tap to reconnect/scan
             Button(action: {
-                bpmManager.reconnect()
+                if bpmManager.currentBPM == nil {
+                    bpmManager.startBluetoothScanning()
+                } else {
+                    bpmManager.reconnect()
+                }
             }) {
                 HStack(spacing: 6) {
                     Image(systemName: "heart.fill")
@@ -132,7 +136,7 @@ public struct ActiveWorkoutView: View {
                             .font(.subheadline.bold())
                             .foregroundStyle(.white)
                     } else {
-                        Text(bpmManager.isScanning ? "Buscando..." : "Sin pulso")
+                        Text(bpmManager.statusText) // Usar statusText del gestor
                             .font(.caption.bold())
                             .foregroundStyle(.secondary)
                     }
