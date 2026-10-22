@@ -9,6 +9,7 @@ public struct WorkoutActivityAttributes: ActivityAttributes {
         public var currentBPM: Int
         public var exerciseName: String
         public var currentSet: Int
+        public var isRestFinished: Bool
 
         public var timerStartDate: Date {
             timerEndDate.addingTimeInterval(-Double(max(0, totalDuration)))
@@ -20,7 +21,8 @@ public struct WorkoutActivityAttributes: ActivityAttributes {
             sessionStartDate: Date,
             currentBPM: Int,
             exerciseName: String,
-            currentSet: Int
+            currentSet: Int,
+            isRestFinished: Bool = false
         ) {
             self.timerEndDate = timerEndDate
             self.totalDuration = totalDuration
@@ -28,6 +30,7 @@ public struct WorkoutActivityAttributes: ActivityAttributes {
             self.currentBPM = currentBPM
             self.exerciseName = exerciseName
             self.currentSet = currentSet
+            self.isRestFinished = isRestFinished
         }
     }
     

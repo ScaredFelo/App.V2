@@ -21,12 +21,12 @@ struct WorkoutLiveActivityWidget: Widget {
                             .fontWeight(.bold)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                        Text(context.state.exerciseName)
+                            .minimumScaleFactor(0.75)
+                        Text(context.state.isRestFinished ? "Es hora de dar-le" : context.state.exerciseName)
                             .font(.headline)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(context.state.isRestFinished ? Color.green : Color.white)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .minimumScaleFactor(0.75)
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
@@ -35,7 +35,7 @@ struct WorkoutLiveActivityWidget: Widget {
                             .bold()
                             .foregroundStyle(.red)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .minimumScaleFactor(0.75)
                         Text("Serie \(context.state.currentSet)")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -44,24 +44,34 @@ struct WorkoutLiveActivityWidget: Widget {
                 }
                 
                 // Barra de progreso sin etiquetas duplicadas
-                VStack(spacing: 4) {
-                    ProgressView(timerInterval: context.state.timerStartDate...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
-                        .progressViewStyle(.linear)
-                        .tint(.green)
-                    
-                    HStack {
-                        Text("Descanso")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        Spacer()
-                        Text(context.state.timerEndDate, style: .timer)
-                            .font(.caption)
-                            .bold()
-                            .monospacedDigit()
-                            .foregroundStyle(.green)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                if context.state.isRestFinished {
+                    Text("Es hora de dar-le")
+                        .font(.headline)
+                        .bold()
+                        .foregroundStyle(.green)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    VStack(spacing: 4) {
+                        ProgressView(timerInterval: context.state.timerStartDate...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
+                            .progressViewStyle(.linear)
+                            .tint(.green)
+
+                        HStack {
+                            Text("Descanso")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            Spacer()
+                            Text(context.state.timerEndDate, style: .timer)
+                                .font(.caption)
+                                .bold()
+                                .monospacedDigit()
+                                .foregroundStyle(.green)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                        }
                     }
                 }
             }
@@ -78,13 +88,13 @@ struct WorkoutLiveActivityWidget: Widget {
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                        Text(context.state.exerciseName)
+                            .minimumScaleFactor(0.75)
+                        Text(context.state.isRestFinished ? "Es hora de dar-le" : context.state.exerciseName)
                             .font(.headline)
                             .bold()
-                            .foregroundStyle(.white)
+                            .foregroundStyle(context.state.isRestFinished ? Color.green : Color.white)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .minimumScaleFactor(0.75)
                     }
                 }
                 
@@ -98,73 +108,103 @@ struct WorkoutLiveActivityWidget: Widget {
                         .font(.subheadline)
                         .bold()
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                        .minimumScaleFactor(0.75)
                         Text("Serie \(context.state.currentSet)")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .minimumScaleFactor(0.75)
                     }
                 }
                 
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 6) {
-                        // Ocultamos las etiquetas internas de ProgressView para no duplicar números
-                        ProgressView(timerInterval: context.state.timerStartDate...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
-                            .progressViewStyle(.linear)
-                            .tint(.green)
-                        
-                        HStack {
-                            Text("Descanso restante")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                            Spacer()
-                            Text(context.state.timerEndDate, style: .timer)
-                                .font(.headline)
-                                .bold()
-                                .monospacedDigit()
-                                .foregroundStyle(.green)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
+                    if context.state.isRestFinished {
+                        Text("Es hora de dar-le")
+                            .font(.headline)
+                            .bold()
+                            .foregroundStyle(.green)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 2)
+                    } else {
+                        VStack(spacing: 4) {
+                            // Ocultamos las etiquetas internas de ProgressView para no duplicar números
+                            ProgressView(timerInterval: context.state.timerStartDate...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
+                                .progressViewStyle(.linear)
+                                .tint(.green)
+
+                            HStack {
+                                Text("Descanso restante")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                                Spacer()
+                                Text(context.state.timerEndDate, style: .timer)
+                                    .font(.subheadline)
+                                    .bold()
+                                    .monospacedDigit()
+                                    .foregroundStyle(.green)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                            }
                         }
+                        .padding(.top, 2)
                     }
-                    .padding(.top, 8)
                 }
                 
             } compactLeading: {
-                // Modo Compacto Izquierda (Corazón + BPM)
-                HStack(spacing: 4) {
-                    Image(systemName: "heart.fill")
-                        .foregroundStyle(.red)
-                        .font(.system(size: 11))
-                    Text(context.state.currentBPM > 0 ? "\(context.state.currentBPM)" : "--")
-                        .font(.system(size: 12, weight: .bold))
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                if context.state.isRestFinished {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.system(size: 13))
+                } else {
+                    // Modo Compacto Izquierda (Corazón + BPM)
+                    HStack(spacing: 4) {
+                        Image(systemName: "heart.fill")
+                            .foregroundStyle(.red)
+                            .font(.system(size: 11))
+                        Text(context.state.currentBPM > 0 ? "\(context.state.currentBPM)" : "--")
+                            .font(.system(size: 12, weight: .bold))
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                    }
                 }
             } compactTrailing: {
-                // Modo Compacto Derecha (Barra centrada y alineada + un único temporizador)
-                HStack(spacing: 6) {
+                if context.state.isRestFinished {
+                    Text("Es hora de dar-le")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.green)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                } else {
+                    // Modo Compacto Derecha (Barra centrada y alineada + un único temporizador)
+                    HStack(spacing: 6) {
+                        ProgressView(timerInterval: context.state.timerStartDate...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
+                            .progressViewStyle(.linear)
+                            .tint(.green)
+                            .frame(width: 38)
+
+                        Text(context.state.timerEndDate, style: .timer)
+                            .font(.system(size: 12, weight: .bold))
+                            .monospacedDigit()
+                            .foregroundStyle(.green)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                    }
+                }
+            } minimal: {
+                if context.state.isRestFinished {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.green)
+                } else {
                     ProgressView(timerInterval: context.state.timerStartDate...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
                         .progressViewStyle(.linear)
                         .tint(.green)
-                        .frame(width: 38)
-                    
-                    Text(context.state.timerEndDate, style: .timer)
-                        .font(.system(size: 12, weight: .bold))
-                        .monospacedDigit()
-                        .foregroundStyle(.green)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                        .frame(width: 18)
                 }
-            } minimal: {
-                ProgressView(timerInterval: context.state.timerStartDate...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
-                    .progressViewStyle(.linear)
-                    .tint(.green)
-                    .frame(width: 18)
             }
         }
     }

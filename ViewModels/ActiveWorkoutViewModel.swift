@@ -292,7 +292,7 @@ public final class ActiveWorkoutViewModel {
             currentRestModeTitle = "Descanso (\(seconds)s)"
             timerEndDate = Date().addingTimeInterval(Double(seconds))
             startLiveActivity(exerciseName: exerciseName, timerEndDate: timerEndDate!, totalDuration: seconds)
-            AudioAlertService.shared.scheduleRestFinishedNotification(after: seconds)
+            AudioAlertService.shared.startBackgroundAudio()
             startTimerCountdown()
 
         case .bpmDrop(let targetBpm):
@@ -354,7 +354,6 @@ public final class ActiveWorkoutViewModel {
             totalRestSeconds += 10
             restTimeRemaining = max(0, Int(ceil(newEndDate.timeIntervalSinceNow)))
             updateLiveActivity()
-            AudioAlertService.shared.scheduleRestFinishedNotification(after: restTimeRemaining)
         }
     }
 
@@ -380,7 +379,6 @@ public final class ActiveWorkoutViewModel {
                 totalRestSeconds = max(10, totalRestSeconds - 10)
                 restTimeRemaining = remaining
                 updateLiveActivity()
-                AudioAlertService.shared.scheduleRestFinishedNotification(after: remaining)
             }
         }
     }
@@ -399,7 +397,6 @@ public final class ActiveWorkoutViewModel {
             timerEndDate = Date().addingTimeInterval(Double(restTimeRemaining))
         }
 
-        AudioAlertService.shared.cancelRestFinishedNotification()
         endLiveActivity()
     }
 
@@ -415,7 +412,7 @@ public final class ActiveWorkoutViewModel {
             }
             timerEndDate = Date().addingTimeInterval(Double(restTimeRemaining))
             startLiveActivity(exerciseName: currentExerciseName, timerEndDate: timerEndDate!, totalDuration: totalRestSeconds)
-            AudioAlertService.shared.scheduleRestFinishedNotification(after: restTimeRemaining)
+            AudioAlertService.shared.startBackgroundAudio()
             startTimerCountdown()
 
         case .bpmDrop(let targetBpm):
@@ -430,11 +427,18 @@ public final class ActiveWorkoutViewModel {
     }
 
     private func finishRest() {
-        stopRest()
+        guard isResting else { return }
         AudioAlertService.shared.playRestFinishedAlert()
+        clearRestState()
+        endLiveActivity(finished: true)
     }
 
     public func stopRest() {
+        clearRestState()
+        endLiveActivity()
+    }
+
+    private func clearRestState() {
         timerTask?.cancel()
         timerTask = nil
         bpmObserverTask?.cancel()
@@ -444,8 +448,6 @@ public final class ActiveWorkoutViewModel {
         restTargetBpm = nil
         timerEndDate = nil
         currentRestCondition = nil
-        AudioAlertService.shared.cancelRestFinishedNotification()
-        endLiveActivity()
     }
 
     // MARK: - Finish / Cancel
@@ -577,12 +579,39 @@ public final class ActiveWorkoutViewModel {
         }
     }
 
-    private func endLiveActivity() {
-        guard let activity = currentActivity else { return }
+    private func endLiveActivity(finished: Bool = false) {
+        guard let activity = currentActivity else {
+            AudioAlertService.shared.stopBackgroundAudio()
+            return
+        }
         currentActivity = nil
-        let finalState = activity.content.state
-        Task {
-            await activity.end(ActivityContent(state: finalState, staleDate: nil), dismissalPolicy: .immediate)
+
+        guard finished else {
+            AudioAlertService.shared.stopBackgroundAudio()
+            let finalState = activity.content.state
+            Task {
+                await activity.end(ActivityContent(state: finalState, staleDate: nil), dismissalPolicy: .immediate)
+            }
+            return
+        }
+
+        let previousState = activity.content.state
+        let finalState = WorkoutActivityAttributes.ContentState(
+            timerEndDate: Date(),
+            totalDuration: max(0, totalRestSeconds),
+            sessionStartDate: previousState.sessionStartDate,
+            currentBPM: BPMManager.shared.currentBPM,
+            exerciseName: previousState.exerciseName,
+            currentSet: previousState.currentSet,
+            isRestFinished: true
+        )
+
+        Task { @MainActor in
+            await activity.end(
+                ActivityContent(state: finalState, staleDate: nil),
+                dismissalPolicy: .after(Date().addingTimeInterval(30))
+            )
+            AudioAlertService.shared.stopBackgroundAudio()
         }
     }
 }

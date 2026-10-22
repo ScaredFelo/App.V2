@@ -211,58 +211,62 @@ public struct ActiveWorkoutView: View {
         }
     }
 
+    @ViewBuilder
     private var workoutFooter: some View {
-        ZStack {
-            Color.black
-
-            if viewModel.isResting && viewModel.isTimerMinimized {
-                MinimizedTimerView(
-                    timeRemaining: viewModel.restTimeRemaining,
-                    isPaused: viewModel.isRestPaused,
-                    onExpand: { viewModel.isTimerMinimized = false },
-                    onTogglePause: {
-                        if viewModel.isRestPaused {
-                            viewModel.resumeRest()
-                        } else {
-                            viewModel.pauseRest()
-                        }
-                    },
-                    onAdd10: { viewModel.add10Seconds() },
-                    onSub10: { viewModel.sub10Seconds() },
-                    onSkip: { viewModel.skipRest() }
-                )
-            }
+        if viewModel.isResting && viewModel.isTimerMinimized {
+            MinimizedTimerView(
+                timeRemaining: viewModel.restTimeRemaining,
+                isPaused: viewModel.isRestPaused,
+                onExpand: { viewModel.isTimerMinimized = false },
+                onTogglePause: {
+                    if viewModel.isRestPaused {
+                        viewModel.resumeRest()
+                    } else {
+                        viewModel.pauseRest()
+                    }
+                },
+                onAdd10: { viewModel.add10Seconds() },
+                onSub10: { viewModel.sub10Seconds() },
+                onSkip: { viewModel.skipRest() }
+            )
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+            .background(Color.clear)
+            .frame(maxWidth: .infinity)
         }
-        .frame(height: 72)
-        .frame(maxWidth: .infinity)
-        .background(Color.black)
     }
 
     private var workoutHeader: some View {
-        HStack(spacing: 10) {
-            Button {
-                showingCancelConfirmation = true
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.white)
-                    .frame(width: 32, height: 32)
-                    .background(Color(.systemGray6).opacity(0.3))
-                    .clipShape(Circle())
-            }
-            .accessibilityLabel("Cancelar entrenamiento")
-
-            VStack(alignment: .leading, spacing: 2) {
+        ZStack {
+            VStack(spacing: 2) {
                 Text(viewModel.routine.name)
                     .font(.headline)
                     .foregroundStyle(.white)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                 Text("\(Int(viewModel.session.totalVolumeKg)) kg")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 44)
 
-            Spacer()
+            HStack {
+                Button {
+                    showingCancelConfirmation = true
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                        .frame(width: 32, height: 32)
+                        .background(Color(.systemGray6).opacity(0.3))
+                        .clipShape(Circle())
+                }
+                .accessibilityLabel("Cancelar entrenamiento")
+
+                Spacer()
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)

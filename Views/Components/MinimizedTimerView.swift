@@ -60,7 +60,7 @@ public struct MinimizedTimerView: View {
             )
 
             timerButton(
-                icon: "goback.10",
+                icon: "gobackward.10",
                 tint: .white,
                 background: Color(.systemGray6).opacity(0.3),
                 action: onSub10,
@@ -93,7 +93,6 @@ public struct MinimizedTimerView: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.white.opacity(0.15), lineWidth: 1)
         )
-        .padding(.horizontal, 12)
     }
 
     private func timerButton(
@@ -105,6 +104,7 @@ public struct MinimizedTimerView: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: icon)
+                .renderingMode(.template)
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(tint)
                 .frame(width: 32, height: 32)

@@ -65,7 +65,8 @@ public struct CircularTimerView: View {
             // Adjust Controls (+10s / -10s)
             HStack(spacing: 20) {
                 Button(action: onSub10) {
-                    Image(systemName: "goback.10")
+                    Image(systemName: "gobackward.10")
+                        .renderingMode(.template)
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 60, height: 40)
