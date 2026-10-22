@@ -76,9 +76,6 @@ public struct CircularTimerView: View {
                 }
             }
 
-    public let onMinimize: () -> Void
-
-    // ... inside body ...
             // Skip Button
             Button(action: onSkip) {
                 Text("Omitir Descanso")
