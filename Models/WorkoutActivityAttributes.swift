@@ -1,32 +1,22 @@
-import Foundation
 import ActivityKit
+import Foundation
 
 public struct WorkoutActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         public var timerEndDate: Date
-        public var currentBPM: Int
-        public var targetBPM: Int
         public var exerciseName: String
-        public var isBpmMode: Bool
-
-        public init(
-            timerEndDate: Date,
-            currentBPM: Int,
-            targetBPM: Int,
-            exerciseName: String,
-            isBpmMode: Bool
-        ) {
+        public var currentSet: Int
+        
+        public init(timerEndDate: Date, exerciseName: String, currentSet: Int) {
             self.timerEndDate = timerEndDate
-            self.currentBPM = currentBPM
-            self.targetBPM = targetBPM
             self.exerciseName = exerciseName
-            self.isBpmMode = isBpmMode
+            self.currentSet = currentSet
         }
     }
-
-    public var routineName: String
-
-    public init(routineName: String) {
-        self.routineName = routineName
+    
+    public var workoutName: String
+    
+    public init(workoutName: String) {
+        self.workoutName = workoutName
     }
 }
