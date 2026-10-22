@@ -17,82 +17,81 @@ public struct ActiveWorkoutView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                // Header Status & BPM Indicator
-                workoutHeader
-
-                // Exercises List & Finish Button at the bottom
-                ScrollView {
-                    LazyVStack(spacing: 24) {
-                        ForEach(viewModel.routine.exercises.sorted(by: { $0.sortOrder < $1.sortOrder })) { routineExercise in
-                            if let exercise = routineExercise.exercise {
-                                ExerciseCardView(
-                                    routineExercise: routineExercise,
-                                    exercise: exercise,
-                                    sets: viewModel.activeSets[routineExercise.id] ?? [],
-                                    onToggleSet: { setIndex in
-                                        viewModel.toggleSetCompletion(for: routineExercise.id, setIndex: setIndex, modelContext: modelContext)
-                                    },
-                                    onUpdateSet: { setIndex, weight, reps in
-                                        if var sets = viewModel.activeSets[routineExercise.id], sets.indices.contains(setIndex) {
-                                            sets[setIndex].weight = weight
-                                            sets[setIndex].reps = reps
-                                            viewModel.activeSets[routineExercise.id] = sets
-                                        }
+            // List of exercises on the main level
+            ScrollView {
+                LazyVStack(spacing: 24) {
+                    // Header Status & BPM
+                    workoutHeader
+                        .padding(.top, 10)
+                    
+                    ForEach(viewModel.routine.exercises.sorted(by: { $0.sortOrder < $1.sortOrder })) { routineExercise in
+                        if let exercise = routineExercise.exercise {
+                            ExerciseCardView(
+                                routineExercise: routineExercise,
+                                exercise: exercise,
+                                sets: viewModel.activeSets[routineExercise.id] ?? [],
+                                onToggleSet: { setIndex in
+                                    viewModel.toggleSetCompletion(for: routineExercise.id, setIndex: setIndex, modelContext: modelContext)
+                                },
+                                onUpdateSet: { setIndex, weight, reps in
+                                    if var sets = viewModel.activeSets[routineExercise.id], sets.indices.contains(setIndex) {
+                                        sets[setIndex].weight = weight
+                                        sets[setIndex].reps = reps
+                                        viewModel.activeSets[routineExercise.id] = sets
                                     }
-                                )
-                            }
-                        }
-
-                        // Finish Workout Button moved to the bottom of the list
-                        Button(action: {
-                            showingFinishConfirmation = true
-                        }) {
-                            Text("Finalizar Entrenamiento")
-                                .font(.headline)
-                                .foregroundColor(.black)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.white)
-                                .cornerRadius(12)
-                        }
-                        .padding(.top, 16)
-                        .padding(.bottom, 32)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 20)
-                }
-            }
-
-                // Rest Overlay Banner with Circular Timer
-            if viewModel.isResting {
-                ZStack {
-                    Color.black.opacity(0.85).ignoresSafeArea()
-                    if !viewModel.isTimerMinimized {
-                        CircularTimerView(
-                            timeRemaining: viewModel.restTimeRemaining,
-                            totalSeconds: viewModel.totalRestSeconds,
-                            onAdd10: { viewModel.add10Seconds() },
-                            onSub10: { viewModel.sub10Seconds() },
-                            onSkip: { viewModel.skipRest() },
-                            onMinimize: { viewModel.isTimerMinimized = true }
-                        )
-                    } else {
-                        VStack {
-                            Spacer()
-                            MinimizedTimerView(
-                                timeRemaining: viewModel.restTimeRemaining,
-                                onExpand: { viewModel.isTimerMinimized = false },
-                                onAdd10: { viewModel.add10Seconds() },
-                                onSkip: { viewModel.skipRest() }
+                                }
                             )
-                            .padding(.bottom, 30)
                         }
                     }
+
+                    // Finish Workout Button
+                    Button(action: {
+                        showingFinishConfirmation = true
+                    }) {
+                        Text("Finalizar Entrenamiento")
+                            .font(.headline)
+                            .foregroundColor(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.white)
+                            .cornerRadius(12)
+                    }
+                    .padding(.top, 16)
+                    .padding(.bottom, 100)
                 }
-                .transition(.opacity)
-                .animation(.easeInOut, value: viewModel.isResting)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 20)
             }
+
+            // Floating Rest UI
+            if viewModel.isResting {
+                if !viewModel.isTimerMinimized {
+                    Color.black.opacity(0.85).ignoresSafeArea()
+                    CircularTimerView(
+                        timeRemaining: viewModel.restTimeRemaining,
+                        totalSeconds: viewModel.totalRestSeconds,
+                        onAdd10: { viewModel.add10Seconds() },
+                        onSub10: { viewModel.sub10Seconds() },
+                        onSkip: { viewModel.skipRest() },
+                        onMinimize: { viewModel.isTimerMinimized = true }
+                    )
+                } else {
+                    VStack {
+                        Spacer()
+                        MinimizedTimerView(
+                            timeRemaining: viewModel.restTimeRemaining,
+                            onExpand: { viewModel.isTimerMinimized = false },
+                            onAdd10: { viewModel.add10Seconds() },
+                            onSkip: { viewModel.skipRest() }
+                        )
+                        .padding(.bottom, 30)
+                        .allowsHitTesting(true)
+                    }
+                }
+            }
+        }
+        .onAppear {
+            bpmManager.startBluetoothScanning()
         }
         .navigationBarHidden(true)
         .alert("¿Finalizar entrenamiento?", isPresented: $showingFinishConfirmation) {
