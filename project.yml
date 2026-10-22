@@ -2,6 +2,7 @@ name: AppGym
 options:
   bundleIdPrefix: com.jordiferres
   objectVersion: 56
+
 targets:
   AppGym:
     type: application
@@ -14,7 +15,8 @@ targets:
       - path: Services
       - path: ViewModels
       - path: Views
-      - path: Widgets
+    dependencies:
+      - target: AppGymWidgets
     frameworks:
       - sdk: HealthKit.framework
       - sdk: CoreBluetooth.framework
@@ -31,6 +33,34 @@ targets:
         PRODUCT_NAME: AppGym
         PRODUCT_BUNDLE_IDENTIFIER: com.jordiferres.appgym
         INFOPLIST_FILE: Info.plist
+        SWIFT_VERSION: "5.0"
+        SWIFT_STRICT_CONCURRENCY: "minimal"
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_ALLOWED: "NO"
+        GENERATE_INFOPLIST_FILE: "YES"
+
+  AppGymWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    bundleId: com.jordiferres.appgym.widgets
+    sources:
+      - path: Widgets
+      - path: Models/WorkoutActivityAttributes.swift
+    frameworks:
+      - sdk: WidgetKit.framework
+      - sdk: ActivityKit.framework
+      - sdk: SwiftUI.framework
+    info:
+      path: Widgets/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_NAME: AppGymWidgets
+        PRODUCT_BUNDLE_IDENTIFIER: com.jordiferres.appgym.widgets
         SWIFT_VERSION: "5.0"
         SWIFT_STRICT_CONCURRENCY: "minimal"
         CODE_SIGNING_REQUIRED: "NO"
