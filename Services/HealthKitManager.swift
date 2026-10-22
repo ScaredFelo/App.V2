@@ -7,6 +7,8 @@ class HealthKitManager: ObservableObject {
     @Published var isAuthorized: Bool = false
     
     private let healthStore = HKHealthStore()
+    private var workoutSession: HKWorkoutSession?
+    private var liveBuilder: HKLiveWorkoutBuilder?
     
     func solicitarPermisoHealthKit(completion: @escaping (Bool) -> Void) {
         guard HKHealthStore.isHealthDataAvailable() else {
@@ -19,20 +21,46 @@ class HealthKitManager: ObservableObject {
             return
         }
         
+        let tiposACompartir: Set<HKSampleType> = [HKObjectType.workoutType()]
         let tiposAleer: Set<HKObjectType> = [tipoRitmoCardiaco]
         
-        healthStore.requestAuthorization(toShare: nil, read: tiposAleer) { [weak self] success, error in
+        healthStore.requestAuthorization(toShare: tiposACompartir, read: tiposAleer) { [weak self] success, error in
             DispatchQueue.main.async {
                 self?.isAuthorized = success
                 if success {
-                    print("Permiso concedido por el usuario.")
-                    self?.iniciarObservacionBPM()
-                } else {
-                    print("Permiso denegado o error: \(String(describing: error))")
+                    self?.iniciarWorkoutSession()
                 }
                 completion(success)
             }
         }
+    }
+    
+    func iniciarWorkoutSession() {
+        let configuration = HKWorkoutConfiguration()
+        configuration.activityType = .traditionalStrengthTraining
+        configuration.locationType = .indoor
+        
+        do {
+            workoutSession = try HKWorkoutSession(healthStore: healthStore, configuration: configuration)
+            liveBuilder = workoutSession?.associatedWorkoutBuilder()
+            
+            liveBuilder?.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: configuration)
+            
+            workoutSession?.startActivity(with: Date())
+            liveBuilder?.beginCollection(withStart: Date()) { [weak self] success, error in
+                if success {
+                    self?.iniciarObservacionBPM()
+                }
+            }
+        } catch {
+            print("Error al iniciar HKWorkoutSession: \(error.localizedDescription)")
+            iniciarObservacionBPM()
+        }
+    }
+    
+    func detenerWorkoutSession() {
+        workoutSession?.end()
+        liveBuilder?.endCollection(withEnd: Date()) { _, _ in }
     }
     
     func iniciarObservacionBPM() {
@@ -57,7 +85,6 @@ class HealthKitManager: ObservableObject {
         healthStore.execute(query)
         healthStore.enableBackgroundDelivery(for: tipoRitmoCardiaco, frequency: .immediate) { _, _ in }
         
-        // Primera lectura inmediata al iniciar
         obtenerUltimoBPM { [weak self] bpm in
             DispatchQueue.main.async {
                 if bpm > 0 {
@@ -69,7 +96,6 @@ class HealthKitManager: ObservableObject {
     
     func obtenerUltimoBPM(completion: @escaping (Double) -> Void) {
         guard let tipoRitmoCardiaco = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
-        
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
         
         let query = HKSampleQuery(sampleType: tipoRitmoCardiaco, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, results, error in
@@ -77,12 +103,9 @@ class HealthKitManager: ObservableObject {
                 completion(0)
                 return
             }
-            
             let unidadBPM = HKUnit.count().unitDivided(by: HKUnit.minute())
-            let valorBPM = muestra.quantity.doubleValue(for: unidadBPM)
-            completion(valorBPM)
+            completion(muestra.quantity.doubleValue(for: unidadBPM))
         }
-        
         healthStore.execute(query)
     }
 }
