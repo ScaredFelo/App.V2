@@ -8,6 +8,8 @@
     <string>AppGym</string>
     <key>CFBundleName</key>
     <string>AppGym</string>
+    <key>CFBundleDisplayName</key>
+    <string>AppGym</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
