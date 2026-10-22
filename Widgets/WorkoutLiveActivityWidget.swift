@@ -12,48 +12,47 @@ struct AppGymWidgetBundle: WidgetBundle {
 struct WorkoutLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: WorkoutActivityAttributes.self) { context in
-            // Vista en Pantalla de Bloqueo / Notificaciones
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(context.attributes.workoutName.uppercased())
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.secondary)
-                    
-                    Text(context.state.exerciseName)
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                    
-                    HStack(spacing: 8) {
+            // Vista en Pantalla de Bloqueo
+            VStack(spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(context.attributes.workoutName.uppercased())
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.secondary)
+                        Text(context.state.exerciseName)
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
                         Label("\(context.state.currentBPM > 0 ? "\(context.state.currentBPM)" : "--") BPM", systemImage: "heart.fill")
                             .font(.caption)
+                            .bold()
                             .foregroundStyle(.red)
-                        
-                        Text("•")
-                            .foregroundStyle(.secondary)
-                        
                         Text("Serie \(context.state.currentSet)")
-                            .font(.caption)
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
                 
-                Spacer()
-                
-                // Barra y tiempo de descanso
-                VStack(alignment: .trailing, spacing: 6) {
-                    Text(context.state.timerEndDate, style: .timer)
-                        .font(.title2)
-                        .bold()
-                        .monospacedDigit()
-                        .foregroundStyle(.white)
+                // Barra de progreso sin etiquetas duplicadas
+                VStack(spacing: 4) {
+                    ProgressView(timerInterval: Date()...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
+                        .progressViewStyle(.linear)
+                        .tint(.green)
                     
-                    ProgressView(timerInterval: Date()...context.state.timerEndDate, countsDown: true) {
-                        EmptyView()
+                    HStack {
+                        Text("Descanso")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(context.state.timerEndDate, style: .timer)
+                            .font(.caption)
+                            .bold()
+                            .monospacedDigit()
+                            .foregroundStyle(.green)
                     }
-                    .progressViewStyle(.linear)
-                    .tint(.green)
-                    .frame(width: 80)
                 }
             }
             .padding()
@@ -63,15 +62,15 @@ struct WorkoutLiveActivityWidget: Widget {
             DynamicIsland {
                 // Modo Expandido (mantener pulsada la isla)
                 DynamicIslandExpandedRegion(.leading) {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(context.attributes.workoutName.uppercased())
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.secondary)
-                        
                         Text(context.state.exerciseName)
                             .font(.headline)
                             .bold()
                             .foregroundStyle(.white)
+                            .lineLimit(1)
                     }
                 }
                 
@@ -84,33 +83,32 @@ struct WorkoutLiveActivityWidget: Widget {
                         }
                         .font(.subheadline)
                         .bold()
-                        
                         Text("Serie \(context.state.currentSet)")
-                            .font(.caption)
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
                 
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 6) {
-                        ProgressView(timerInterval: Date()...context.state.timerEndDate, countsDown: true) {
-                            EmptyView()
-                        }
-                        .progressViewStyle(.linear)
-                        .tint(.green)
+                        // Ocultamos las etiquetas internas de ProgressView para no duplicar números
+                        ProgressView(timerInterval: Date()...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
+                            .progressViewStyle(.linear)
+                            .tint(.green)
                         
                         HStack {
-                            Text("Descanso")
+                            Text("Descanso restante")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                             Spacer()
                             Text(context.state.timerEndDate, style: .timer)
-                                .font(.subheadline)
+                                .font(.headline)
                                 .bold()
                                 .monospacedDigit()
+                                .foregroundStyle(.green)
                         }
                     }
-                    .padding(.top, 4)
+                    .padding(.top, 8)
                 }
                 
             } compactLeading: {
@@ -124,31 +122,24 @@ struct WorkoutLiveActivityWidget: Widget {
                         .monospacedDigit()
                 }
             } compactTrailing: {
-                // Modo Compacto Derecha (Barra Lineal + Contador)
+                // Modo Compacto Derecha (Barra centrada y alineada + un único temporizador)
                 HStack(spacing: 6) {
-                    ProgressView(timerInterval: Date()...context.state.timerEndDate, countsDown: true) {
-                        EmptyView()
-                    }
-                    .progressViewStyle(.linear)
-                    .tint(.green)
-                    .frame(width: 36)
+                    ProgressView(timerInterval: Date()...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
+                        .progressViewStyle(.linear)
+                        .tint(.green)
+                        .frame(width: 38)
                     
                     Text(context.state.timerEndDate, style: .timer)
                         .font(.system(size: 12, weight: .bold))
                         .monospacedDigit()
+                        .foregroundStyle(.green)
                 }
             } minimal: {
-                ProgressView(timerInterval: Date()...context.state.timerEndDate, countsDown: true) {
-                    EmptyView()
-                } currentValueLabel: {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 8))
-                        .foregroundStyle(.red)
-                }
-                .progressViewStyle(.circular)
-                .tint(.green)
+                ProgressView(timerInterval: Date()...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
+                    .progressViewStyle(.linear)
+                    .tint(.green)
+                    .frame(width: 18)
             }
-            .keylineTint(.green)
         }
     }
 }
