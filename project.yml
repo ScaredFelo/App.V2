@@ -14,12 +14,12 @@ targets:
       - path: Services
       - path: ViewModels
       - path: Views
+      - path: Widgets
     settings:
       base:
         PRODUCT_NAME: AppGym
         PRODUCT_BUNDLE_IDENTIFIER: com.jordiferres.appgym
         INFOPLIST_FILE: Info.plist
-        SWIFT_VERSION: "5.10"
         CODE_SIGNING_REQUIRED: "NO"
         CODE_SIGN_IDENTITY: ""
         CODE_SIGNING_ALLOWED: "NO"
