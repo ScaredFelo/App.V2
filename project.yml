@@ -1,7 +1,7 @@
 name: AppGym
 options:
   bundleIdPrefix: com.tuusuario
-  xcodeVersion: "15.4"
+  objectVersion: 56
 targets:
   AppGym:
     type: application
