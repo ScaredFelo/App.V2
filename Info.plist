@@ -2,13 +2,23 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.jordiferres.appgym</string>
+    <key>CFBundleExecutable</key>
+    <string>AppGym</string>
+    <key>CFBundleName</key>
+    <string>AppGym</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
     <key>NSHealthShareUsageDescription</key>
-    <string>App.gym requiere acceso a Salud para monitorizar tus pulsaciones durante los entrenamientos.</string>
+    <string>Necesitamos acceso a HealthKit para monitorear tu frecuencia cardíaca durante los entrenamientos.</string>
     <key>NSHealthUpdateUsageDescription</key>
-    <string>App.gym utiliza Salud para guardar tus sesiones de entrenamiento.</string>
+    <string>Guardaremos tus sesiones de entrenamiento en Apple Health.</string>
     <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>App.gym utiliza Bluetooth para conectar bandas de frecuencia cardíaca y monitorizar tus pulsaciones.</string>
-    <key>NSBluetoothPeripheralUsageDescription</key>
-    <string>App.gym utiliza Bluetooth para conectar sensores de ritmo cardíaco externos.</string>
+    <string>Conexión con sensores de frecuencia cardíaca BLE.</string>
 </dict>
 </plist>

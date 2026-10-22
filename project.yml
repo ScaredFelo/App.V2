@@ -1,6 +1,6 @@
 name: AppGym
 options:
-  bundleIdPrefix: com.tuusuario
+  bundleIdPrefix: com.jordiferres
   objectVersion: 56
 targets:
   AppGym:
@@ -11,7 +11,7 @@ targets:
       - path: .
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.tuusuario.appgym
+        PRODUCT_BUNDLE_IDENTIFIER: com.jordiferres.appgym
         INFOPLIST_FILE: Info.plist
         DEVELOPMENT_TEAM: ""
         CODE_SIGNING_REQUIRED: "NO"
