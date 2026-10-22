@@ -24,6 +24,11 @@ public struct ExerciseListView: View {
                     List {
                         ForEach(filteredExercises) { exercise in
                             ExerciseRowView(exercise: exercise)
+                                .contentShape(RoundedRectangle(cornerRadius: 16))
+                                .onLongPressGesture(minimumDuration: 0.5) {
+                                    exerciseToConfigure = exercise
+                                }
+                                .accessibilityHint("Mantén pulsado para ajustar el ejercicio")
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                         }
@@ -34,21 +39,7 @@ public struct ExerciseListView: View {
             }
             .navigationTitle("Ejercicios")
             .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Menu {
-                        ForEach(filteredExercises) { exercise in
-                            Button {
-                                exerciseToConfigure = exercise
-                            } label: {
-                                Label(exercise.name, systemImage: "gearshape")
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "gearshape.fill")
-                    }
-                    .disabled(filteredExercises.isEmpty)
-                    .accessibilityLabel("Ajustar ejercicio")
-
+                ToolbarItem(placement: .topBarTrailing) {
                     Button(action: { showingAddModal = true }) {
                         Image(systemName: "plus")
                             .font(.headline)

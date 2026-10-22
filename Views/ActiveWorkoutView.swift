@@ -155,11 +155,9 @@ public struct ActiveWorkoutView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
                 .frame(maxWidth: .infinity)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(1)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: viewModel.isTimerMinimized)
         .onAppear {
             BPMManager.shared.startScanning()
         }
@@ -378,6 +376,7 @@ struct ExerciseCardView: View {
             }
         }
         .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemGray6).opacity(0.1))
         .cornerRadius(16)
     }
