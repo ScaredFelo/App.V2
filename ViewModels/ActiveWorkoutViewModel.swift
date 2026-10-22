@@ -222,6 +222,8 @@ public final class ActiveWorkoutViewModel {
         
         let state = WorkoutActivityAttributes.ContentState(
             timerEndDate: timerEndDate,
+            sessionStartDate: session.startDate,
+            currentBPM: BPMManager.shared.currentBPM ?? 0,
             exerciseName: exerciseName,
             currentSet: currentSetIndex + 1
         )
@@ -241,12 +243,14 @@ public final class ActiveWorkoutViewModel {
     }
 
     private func updateLiveActivity() {
-        guard let activity = currentActivity, let endDate = timerEndDate else { return }
+        guard let activity = Activity<WorkoutActivityAttributes>.activities.first, let endDate = timerEndDate else { return }
         
         let currentSetIndex = session.setsCompleted.count
         
         let state = WorkoutActivityAttributes.ContentState(
             timerEndDate: endDate,
+            sessionStartDate: session.startDate,
+            currentBPM: BPMManager.shared.currentBPM ?? 0,
             exerciseName: currentExerciseName,
             currentSet: currentSetIndex + 1
         )
