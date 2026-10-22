@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 @main
 struct AppGymApp: App {
@@ -25,6 +26,12 @@ struct AppGymApp: App {
         WindowGroup {
             MainTabView()
                 .onAppear {
+                    // Solicitar notificaciones explícitamente para Live Activities
+                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+                        if let error = error {
+                            print("Error notificaciones: \(error.localizedDescription)")
+                        }
+                    }
                     let context = container.mainContext
                     MockDataGenerator.seedIfNeeded(context: context)
                 }

@@ -127,6 +127,7 @@ public final class BPMManager: NSObject {
 
     // MARK: - CoreBluetooth Integration
     public func startBluetoothScanning() {
+        // CORRECCIÓN: Asegurar estado .poweredOn antes de escanear
         guard centralManager.state == .poweredOn else {
             isScanning = false
             return
@@ -140,8 +141,9 @@ public final class BPMManager: NSObject {
 extension BPMManager: CBCentralManagerDelegate, CBPeripheralDelegate {
     nonisolated public func centralManagerDidUpdateState(_ central: CBCentralManager) {
         Task { @MainActor in
-            if central.state == .poweredOn, dataSource == .bluetooth {
-                startBluetoothScanning()
+            // CORRECCIÓN: Iniciar escaneo automáticamente al estar listo
+            if central.state == .poweredOn, self.shared.dataSource == .bluetooth {
+                self.shared.startBluetoothScanning()
             }
         }
     }
@@ -168,8 +170,9 @@ extension BPMManager: CBCentralManagerDelegate, CBPeripheralDelegate {
         Task { @MainActor in
             isConnected = false
             currentBPM = nil
-            if dataSource == .bluetooth {
-                startBluetoothScanning()
+            // CORRECCIÓN: Reconexión automática al desconectar
+            if self.shared.dataSource == .bluetooth {
+                self.shared.startBluetoothScanning()
             }
         }
     }
@@ -192,7 +195,7 @@ extension BPMManager: CBCentralManagerDelegate, CBPeripheralDelegate {
         guard characteristic.uuid == heartRateMeasurementCharacteristicUUID, let data = characteristic.value else { return }
         let bpm = parseHeartRate(from: data)
         Task { @MainActor in
-            self.currentBPM = bpm
+            self.shared.currentBPM = bpm
         }
     }
 

@@ -66,7 +66,7 @@ public struct ActiveWorkoutView: View {
             // Floating Rest UI
             if viewModel.isResting {
                 if !viewModel.isTimerMinimized {
-                    Color.black.opacity(0.85).ignoresSafeArea()
+                    // Eliminado Color.black.opacity(0.85).ignoresSafeArea()
                     CircularTimerView(
                         timeRemaining: viewModel.restTimeRemaining,
                         totalSeconds: viewModel.totalRestSeconds,
