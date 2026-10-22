@@ -5,86 +5,97 @@ import Combine
 class HealthKitManager: ObservableObject {
     @Published var currentBPM: Int = 0
     @Published var isAuthorized: Bool = false
+    @Published var authorizationStatusText: String = "Pendiente de permiso"
     
     private let healthStore = HKHealthStore()
     private var activeWorkoutBuilder: HKWorkoutBuilder?
     private var anchor: HKQueryAnchor?
     
-    func solicitarPermisoHealthKit(completion: @escaping (Bool) -> Void) {
+    func solicitarPermisoHealthKit() {
+        guard activeWorkoutBuilder == nil else { return }
+        
         guard HKHealthStore.isHealthDataAvailable() else {
-            completion(false)
-            return
-        }
-        
-        guard let tipoRitmoCardiaco = HKObjectType.quantityType(forIdentifier: .heartRate) else {
-            completion(false)
-            return
-        }
-        
-        // Solicitar permisos de ESCRITURA para registrar el entrenamiento fantasma que mantiene despierto el sensor
-        let tiposACompartir: Set<HKSampleType> = [HKObjectType.workoutType()]
-        let tiposAleer: Set<HKObjectType> = [tipoRitmoCardiaco]
-        
-        healthStore.requestAuthorization(toShare: tiposACompartir, read: tiposAleer) { [weak self] success, _ in
             DispatchQueue.main.async {
+                self.authorizationStatusText = "HealthKit no disponible en este dispositivo"
+            }
+            return
+        }
+        
+        guard let heartRateType = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
+        let workoutType = HKObjectType.workoutType()
+        
+        let typesToRead: Set<HKObjectType> = [heartRateType]
+        let typesToShare: Set<HKSampleType> = [workoutType]
+        
+        print("Solicitando autorización de HealthKit...")
+        
+        healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead) { [weak self] success, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("Error al solicitar permisos: \(error.localizedDescription)")
+                    self?.authorizationStatusText = "Error de permisos: \(error.localizedDescription)"
+                    self?.isAuthorized = false
+                    return
+                }
+                
                 self?.isAuthorized = success
                 if success {
-                    self?.iniciarSesionFantasmaAirPods()
+                    print("Permiso concedido con éxito.")
+                    self?.authorizationStatusText = "Permiso concedido"
+                    self?.iniciarSesionFantasma()
+                } else {
+                    print("El usuario denegó los permisos de HealthKit.")
+                    self?.authorizationStatusText = "Permiso denegado por el usuario"
                 }
-                completion(success)
             }
         }
     }
     
-    func iniciarSesionFantasmaAirPods() {
+    func iniciarSesionFantasma() {
+        guard activeWorkoutBuilder == nil else { return }
+        
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .traditionalStrengthTraining
         configuration.locationType = .indoor
         
-        // HKWorkoutBuilder local para iOS 17+
         let builder = HKWorkoutBuilder(healthStore: healthStore, configuration: configuration, device: .local())
         self.activeWorkoutBuilder = builder
         
         builder.beginCollection(withStart: Date()) { [weak self] success, _ in
             if success {
-                self?.iniciarObservacionInmediata()
+                self?.iniciarObservadorInmediato()
             }
         }
     }
     
-    func detenerSesion() {
-        activeWorkoutBuilder?.endCollection(withEnd: Date()) { [weak self] _, _ in
-            self?.activeWorkoutBuilder?.finishWorkout { _, _ in }
-        }
-    }
-    
-    func iniciarObservacionInmediata() {
-        guard let tipoRitmoCardiaco = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
+    func iniciarObservadorInmediato() {
+        guard let heartRateType = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
         
-        healthStore.enableBackgroundDelivery(for: tipoRitmoCardiaco, frequency: .immediate) { _, _ in }
+        healthStore.enableBackgroundDelivery(for: heartRateType, frequency: .immediate) { _, _ in }
         
         let query = HKAnchoredObjectQuery(
-            type: tipoRitmoCardiaco,
+            type: heartRateType,
             predicate: nil,
             anchor: anchor,
             limit: HKObjectQueryNoLimit
         ) { [weak self] _, samples, _, newAnchor, _ in
             self?.anchor = newAnchor
-            self?.extraerBPM(samples)
+            self?.procesarMuestras(samples)
         }
         
         query.updateHandler = { [weak self] _, samples, _, newAnchor, _ in
             self?.anchor = newAnchor
-            self?.extraerBPM(samples)
+            self?.procesarMuestras(samples)
         }
         
         healthStore.execute(query)
     }
     
-    private func extraerBPM(_ samples: [HKSample]?) {
-        guard let muestras = samples as? [HKQuantitySample], let ultima = muestras.last else { return }
-        let unidad = HKUnit.count().unitDivided(by: HKUnit.minute())
-        let bpm = Int(ultima.quantity.doubleValue(for: unidad))
+    private func procesarMuestras(_ samples: [HKSample]?) {
+        guard let quantitySamples = samples as? [HKQuantitySample], let lastSample = quantitySamples.last else { return }
+        
+        let unit = HKUnit.count().unitDivided(by: HKUnit.minute())
+        let bpm = Int(lastSample.quantity.doubleValue(for: unit))
         
         DispatchQueue.main.async {
             if bpm > 0 {

@@ -12,7 +12,7 @@ final class BPMManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     private var centralManager: CBCentralManager?
     private var heartRatePeripheral: CBPeripheral?
 
-    private let healthKitManager = HealthKitManager()
+    let healthKitManager = HealthKitManager()
     private var cancellables = Set<AnyCancellable>()
 
     override init() {
@@ -42,12 +42,7 @@ final class BPMManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     }
 
     func requestHealthKitAccess() {
-        healthKitManager.solicitarPermisoHealthKit { [weak self] success in
-            DispatchQueue.main.async {
-                guard let self, self.currentBPM == 0 else { return }
-                self.statusText = success ? "HealthKit listo" : "Sin acceso a Salud"
-            }
-        }
+        healthKitManager.solicitarPermisoHealthKit()
     }
 
     func startScanning() {

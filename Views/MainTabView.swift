@@ -27,5 +27,8 @@ public struct MainTabView: View {
             }
         }
         .tint(.accentColor)
+        .onAppear {
+            BPMManager.shared.healthKitManager.solicitarPermisoHealthKit()
+        }
     }
 }

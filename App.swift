@@ -28,8 +28,6 @@ struct AppGymApp: App {
             MainTabView()
                 .environmentObject(bpmManager)
                 .onAppear {
-                    bpmManager.requestHealthKitAccess()
-
                     // Solicitar notificaciones explícitamente para Live Activities
                     UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
                         if let error = error {
