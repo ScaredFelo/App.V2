@@ -32,6 +32,8 @@ targets:
       base:
         PRODUCT_NAME: AppGym
         PRODUCT_BUNDLE_IDENTIFIER: com.jordiferres.appgym
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_FILE: Info.plist
         SWIFT_VERSION: "5.0"
         SWIFT_STRICT_CONCURRENCY: "minimal"
@@ -55,12 +57,16 @@ targets:
     info:
       path: Widgets/Info.plist
       properties:
+        CFBundleVersion: "1"
+        CFBundleShortVersionString: "1.0.0"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
         PRODUCT_NAME: AppGymWidgets
         PRODUCT_BUNDLE_IDENTIFIER: com.jordiferres.appgym.widgets
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.0"
         SWIFT_STRICT_CONCURRENCY: "minimal"
         CODE_SIGNING_REQUIRED: "NO"
