@@ -8,6 +8,7 @@ class HealthKitManager: ObservableObject {
     
     private let healthStore = HKHealthStore()
     private var anchor: HKQueryAnchor?
+    private var activeQuery: HKAnchoredObjectQuery?
     
     func solicitarPermisoHealthKit(completion: @escaping (Bool) -> Void) {
         guard HKHealthStore.isHealthDataAvailable() else {
@@ -27,44 +28,44 @@ class HealthKitManager: ObservableObject {
             DispatchQueue.main.async {
                 self?.isAuthorized = success
                 if success {
-                    self?.iniciarObservacionBPM()
+                    self?.iniciarRastrearteContinuo()
                 }
                 completion(success)
             }
         }
     }
     
-    func iniciarObservacionBPM() {
+    func iniciarRastrearteContinuo() {
         guard let tipoRitmoCardiaco = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
         
-        // Habilitar entrega inmediata en segundo plano
+        // Habilitar la frecuencia de entrega inmediata
         healthStore.enableBackgroundDelivery(for: tipoRitmoCardiaco, frequency: .immediate) { _, _ in }
         
-        // Consulta anclada para recibir cambios continuos
-        let samplePredicate = HKQuery.predicateForSamples(withStart: Date().addingTimeInterval(-3600), end: nil, options: .strictStartDate)
+        // Predicado para tomar muestras desde hace 5 minutos en adelante
+        let predicado = HKQuery.predicateForSamples(withStart: Date().addingTimeInterval(-300), end: nil, options: .strictStartDate)
         
         let query = HKAnchoredObjectQuery(
             type: tipoRitmoCardiaco,
-            predicate: samplePredicate,
+            predicate: predicado,
             anchor: anchor,
             limit: HKObjectQueryNoLimit
         ) { [weak self] _, samples, _, newAnchor, _ in
             self?.anchor = newAnchor
-            self?.procesarMuestrasBPM(samples)
+            self?.procesarMuestras(samples)
         }
         
         query.updateHandler = { [weak self] _, samples, _, newAnchor, _ in
             self?.anchor = newAnchor
-            self?.procesarMuestrasBPM(samples)
+            self?.procesarMuestras(samples)
         }
         
+        self.activeQuery = query
         healthStore.execute(query)
         obtenerUltimoBPM()
     }
     
-    private func procesarMuestrasBPM(_ samples: [HKSample]?) {
-        guard let quantitySamples = samples as? [HKQuantitySample], let ultimaMuestra = quantitySamples.last else { return }
-        
+    private func procesarMuestras(_ samples: [HKSample]?) {
+        guard let muestras = samples as? [HKQuantitySample], let ultimaMuestra = muestras.last else { return }
         let unidadBPM = HKUnit.count().unitDivided(by: HKUnit.minute())
         let valorBPM = Int(ultimaMuestra.quantity.doubleValue(for: unidadBPM))
         
