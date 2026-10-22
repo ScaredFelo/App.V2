@@ -40,13 +40,13 @@ class HealthKitManager: ObservableObject {
         configuration.locationType = .indoor
         
         do {
-            // Inicializador compatible con iOS 17+
-            workoutSession = try HKWorkoutSession(healthStore: healthStore, configuration: configuration)
-            workoutSession?.startActivity(with: Date())
+            let session = try HKWorkoutSession(healthStore: healthStore, configuration: configuration)
+            self.workoutSession = session
+            session.startActivity(with: Date())
             
             self.iniciarObservacionBPM()
         } catch {
-            print("Error al iniciar HKWorkoutSession en iOS: \(error.localizedDescription)")
+            print("Error al iniciar sesión de entreno en iOS: \(error.localizedDescription)")
             iniciarObservacionBPM()
         }
     }
