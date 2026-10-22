@@ -13,13 +13,19 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Deep Clean Runner Disk Space
+      - name: Wipe Unused Xcode Versions & Free Disk Space
         run: |
+          echo "Espacio en disco antes del borrado:"
+          df -h /
+          # Eliminar versiones secundarias de Xcode que consumen más de 30GB
+          sudo rm -rf /Applications/Xcode_15*.app
+          sudo rm -rf /Applications/Xcode_14*.app
           sudo rm -rf /usr/local/share/android-sdk
           sudo rm -rf /usr/local/share/dotnet
           sudo rm -rf /Library/Developer/CoreSimulator/Caches
-          sudo rm -rf /Library/Developer/CoreSimulator/Profiles
           rm -rf ~/Library/Caches/com.apple.dt.XCode
+          echo "Espacio en disco liberado:"
+          df -h /
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -27,7 +33,7 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate
 
-      - name: Build App (Minimal Disk Footprint)
+      - name: Build App
         run: |
           xcodebuild build \
             -project AppGym.xcodeproj \
@@ -35,18 +41,19 @@ jobs:
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -configuration Release \
-            -derivedDataPath build \
+            -derivedDataPath /tmp/DerivedData \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            DEBUG_INFORMATION_FORMAT=dwarf \
+            ONLY_ACTIVE_ARCH=YES \
+            ARCHS=arm64 \
             -quiet
 
       - name: Package IPA
         run: |
           mkdir -p Payload
-          mv build/Build/Products/Release-iphoneos/AppGym.app Payload/
+          mv /tmp/DerivedData/Build/Products/Release-iphoneos/AppGym.app Payload/
           zip -r AppGym.ipa Payload
 
       - name: Upload IPA Artifact
