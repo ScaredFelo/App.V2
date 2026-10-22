@@ -22,9 +22,11 @@ public final class ActiveWorkoutViewModel {
     public var currentExerciseName = ""
     public var timerEndDate: Date?
     public var isTimerMinimized: Bool = false
+    public var isRestFinishing: Bool = false
 
     private var timerTask: Task<Void, Never>?
     private var bpmObserverTask: Task<Void, Never>?
+    private var restDismissalTask: Task<Void, Never>?
     private var currentActivity: Activity<WorkoutActivityAttributes>?
     private var cancellables = Set<AnyCancellable>()
     private var currentRestCondition: RestCondition?
@@ -423,14 +425,33 @@ public final class ActiveWorkoutViewModel {
     }
 
     public func skipRest() {
-        stopRest()
+        guard isResting, !isRestFinishing else { return }
+        beginRestDismissal(endActivityWhenFinished: false)
     }
 
     private func finishRest() {
-        guard isResting else { return }
+        guard isResting, !isRestFinishing else { return }
         AudioAlertService.shared.playRestFinishedAlert()
-        clearRestState()
-        endLiveActivity(finished: true)
+        beginRestDismissal(endActivityWhenFinished: true)
+    }
+
+    private func beginRestDismissal(endActivityWhenFinished: Bool) {
+        restDismissalTask?.cancel()
+        isRestFinishing = true
+
+        if !endActivityWhenFinished {
+            endLiveActivity()
+        }
+
+        restDismissalTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 260_000_000)
+            guard let self, !Task.isCancelled, self.isRestFinishing else { return }
+
+            self.clearRestState()
+            if endActivityWhenFinished {
+                self.endLiveActivity(finished: true)
+            }
+        }
     }
 
     public func stopRest() {
@@ -439,11 +460,14 @@ public final class ActiveWorkoutViewModel {
     }
 
     private func clearRestState() {
+        restDismissalTask?.cancel()
+        restDismissalTask = nil
         timerTask?.cancel()
         timerTask = nil
         bpmObserverTask?.cancel()
         bpmObserverTask = nil
         isResting = false
+        isRestFinishing = false
         isRestPaused = false
         restTargetBpm = nil
         timerEndDate = nil

@@ -15,6 +15,12 @@ public struct ActiveWorkoutView: View {
     @State private var pendingNewRoutinePromptID: UUID?
     @State private var newRoutineName = ""
 
+    @Namespace private var timerAnimation
+    @State private var timerOriginCardID: UUID?
+    @State private var timerIsLaunching = false
+    @State private var timerLaunchToken = UUID()
+    @State private var timerDragOffset: CGFloat = 0
+
     private let horizontalPadding: CGFloat = 16
 
     public init(session: WorkoutSession, routine: Routine, modelContext: ModelContext) {
@@ -41,8 +47,10 @@ public struct ActiveWorkoutView: View {
                                 routineExercise: routineExercise,
                                 exercise: exercise,
                                 sets: viewModel.activeSets[routineExercise.id] ?? [],
+                                timerAnimation: timerAnimation,
+                                isTimerOrigin: timerIsLaunching && timerOriginCardID == routineExercise.id,
                                 onToggleSet: { setIndex in
-                                    viewModel.toggleSetCompletion(for: routineExercise.id, setIndex: setIndex, modelContext: modelContext)
+                                    toggleSet(for: routineExercise, setIndex: setIndex)
                                 },
                                 onUpdateSet: { setIndex, weight, reps in
                                     if var sets = viewModel.activeSets[routineExercise.id], sets.indices.contains(setIndex) {
@@ -114,7 +122,10 @@ public struct ActiveWorkoutView: View {
             // Temporizador maximizado
             if viewModel.isResting && !viewModel.isTimerMinimized {
                 ZStack {
-                    Color.black.ignoresSafeArea()
+                    Color.black
+                        .ignoresSafeArea()
+                        .opacity(viewModel.isRestFinishing ? 0 : 1)
+                        .transition(.opacity)
 
                     VStack {
                         Spacer()
@@ -131,12 +142,21 @@ public struct ActiveWorkoutView: View {
                                     viewModel.pauseRest()
                                 }
                             },
-                            onSkip: { viewModel.skipRest() },
-                            onMinimize: { viewModel.isTimerMinimized = true }
+                            onSkip: { skipRest() },
+                            onMinimize: { minimizeTimer() }
                         )
+                        .matchedGeometryEffect(id: timerLaunchAnimationID, in: timerAnimation, isSource: false)
+                        .matchedGeometryEffect(id: timerIsLaunching ? "timerContainer-inactive" : "timerContainer", in: timerAnimation, isSource: false)
+                        .scaleEffect(viewModel.isRestFinishing ? 1.05 : 1)
+                        .opacity(viewModel.isRestFinishing ? 0 : 1)
+                        .offset(y: timerDragOffset)
+                        .scaleEffect(timerDragOffset > 0 ? max(0.92, 1 - timerDragOffset / 1200) : 1)
+                        .gesture(timerDragGesture)
+                        .transition(.opacity)
                         Spacer()
                     }
                 }
+                .allowsHitTesting(!viewModel.isRestFinishing)
                 .zIndex(2)
             }
 
@@ -145,7 +165,7 @@ public struct ActiveWorkoutView: View {
                 MinimizedTimerView(
                     timeRemaining: viewModel.restTimeRemaining,
                     isPaused: viewModel.isRestPaused,
-                    onExpand: { viewModel.isTimerMinimized = false },
+                    onExpand: { expandTimer() },
                     onTogglePause: {
                         if viewModel.isRestPaused {
                             viewModel.resumeRest()
@@ -155,14 +175,22 @@ public struct ActiveWorkoutView: View {
                     },
                     onAdd10: { viewModel.add10Seconds() },
                     onSub10: { viewModel.sub10Seconds() },
-                    onSkip: { viewModel.skipRest() }
+                    onSkip: { skipRest() }
                 )
+                .matchedGeometryEffect(id: "timerContainer", in: timerAnimation, isSource: true)
                 .padding(.horizontal, horizontalPadding)
                 .frame(width: geometry.size.width)
                 .padding(.bottom, 8)
+                .offset(y: viewModel.isRestFinishing ? 44 : 0)
+                .opacity(viewModel.isRestFinishing ? 0 : 1)
+                .allowsHitTesting(!viewModel.isRestFinishing)
+                .transition(.opacity)
                 .zIndex(1)
             }
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.84), value: viewModel.isResting)
+        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: viewModel.isTimerMinimized)
+        .animation(.easeIn(duration: 0.22), value: viewModel.isRestFinishing)
         }
         .onAppear {
             BPMManager.shared.startScanning()
@@ -241,6 +269,86 @@ public struct ActiveWorkoutView: View {
         }
     }
 
+    private var timerLaunchAnimationID: String {
+        guard timerIsLaunching, let timerOriginCardID else { return "timerLaunch-none" }
+        return "timerLaunch-\(timerOriginCardID.uuidString)"
+    }
+
+    private var timerDragGesture: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                guard !viewModel.isRestFinishing else { return }
+                timerDragOffset = max(0, value.translation.height)
+            }
+            .onEnded { value in
+                guard !viewModel.isRestFinishing else {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        timerDragOffset = 0
+                    }
+                    return
+                }
+
+                if value.translation.height > 90 || value.predictedEndTranslation.height > 150 {
+                    minimizeTimer()
+                } else {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        timerDragOffset = 0
+                    }
+                }
+            }
+    }
+
+    private func toggleSet(for routineExercise: RoutineExercise, setIndex: Int) {
+        guard let sets = viewModel.activeSets[routineExercise.id], sets.indices.contains(setIndex) else { return }
+        let isCompleting = !sets[setIndex].isCompleted
+
+        if isCompleting {
+            beginTimerLaunch(from: routineExercise.id)
+        }
+
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            viewModel.toggleSetCompletion(for: routineExercise.id, setIndex: setIndex, modelContext: modelContext)
+        }
+    }
+
+    private func beginTimerLaunch(from routineExerciseID: UUID) {
+        let token = UUID()
+        timerLaunchToken = token
+        timerOriginCardID = routineExerciseID
+        timerIsLaunching = true
+        timerDragOffset = 0
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            guard timerLaunchToken == token else { return }
+            withAnimation(.easeOut(duration: 0.2)) {
+                timerIsLaunching = false
+            }
+        }
+    }
+
+    private func minimizeTimer() {
+        guard !viewModel.isRestFinishing else { return }
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+            timerDragOffset = 0
+            viewModel.isTimerMinimized = true
+        }
+    }
+
+    private func expandTimer() {
+        guard !viewModel.isRestFinishing else { return }
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+            timerDragOffset = 0
+            viewModel.isTimerMinimized = false
+        }
+    }
+
+    private func skipRest() {
+        guard viewModel.isResting, !viewModel.isRestFinishing else { return }
+        withAnimation(.easeIn(duration: 0.22)) {
+            viewModel.skipRest()
+        }
+    }
+
     private var workoutHeader: some View {
         ZStack {
             VStack(spacing: 2) {
@@ -289,6 +397,8 @@ struct ExerciseCardView: View {
     let routineExercise: RoutineExercise
     let exercise: Exercise
     let sets: [ActiveWorkoutViewModel.SetInputState]
+    let timerAnimation: Namespace.ID
+    let isTimerOrigin: Bool
     let onToggleSet: (Int) -> Void
     let onUpdateSet: (Int, Double, Int) -> Void
     let onRemove: () -> Void
@@ -387,8 +497,15 @@ struct ExerciseCardView: View {
         .cornerRadius(16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                .stroke(isTimerOrigin ? Color.green.opacity(0.45) : Color.white.opacity(0.08), lineWidth: 1)
         )
+        .overlay(alignment: .center) {
+            Circle()
+                .fill(Color.black.opacity(0.001))
+                .frame(width: 48, height: 48)
+                .matchedGeometryEffect(id: "timerLaunch-\(routineExercise.id.uuidString)", in: timerAnimation, isSource: true)
+                .allowsHitTesting(false)
+        }
     }
 }
 
