@@ -7,7 +7,7 @@ public struct ActiveWorkoutView: View {
 
     @State private var viewModel: ActiveWorkoutViewModel
     @State private var showingFinishConfirmation = false
-    private let bpmManager = BPMManager.shared
+    @ObservedObject private var bpmManager = BPMManager.shared
 
     public init(session: WorkoutSession, routine: Routine, modelContext: ModelContext) {
         _viewModel = State(initialValue: ActiveWorkoutViewModel(session: session, routine: routine, modelContext: modelContext))
@@ -91,7 +91,7 @@ public struct ActiveWorkoutView: View {
             }
         }
         .onAppear {
-            bpmManager.startBluetoothScanning()
+            bpmManager.startScanning()
         }
         .navigationBarHidden(true)
         .alert("¿Finalizar entrenamiento?", isPresented: $showingFinishConfirmation) {
@@ -120,19 +120,19 @@ public struct ActiveWorkoutView: View {
 
             // Live BPM Pill with tap to reconnect/scan
             Button(action: {
-                if bpmManager.currentBPM == nil {
-                    bpmManager.startBluetoothScanning()
+                if bpmManager.currentBPM == 0 {
+                    bpmManager.startScanning()
                 } else {
                     bpmManager.reconnect()
                 }
             }) {
                 HStack(spacing: 6) {
                     Image(systemName: "heart.fill")
-                        .foregroundStyle(bpmManager.currentBPM != nil ? .red : .gray)
-                        .symbolEffect(.pulse, isActive: bpmManager.currentBPM != nil)
+                        .foregroundStyle(bpmManager.currentBPM > 0 ? .red : .gray)
+                        .symbolEffect(.pulse, isActive: bpmManager.currentBPM > 0)
                     
-                    if let bpm = bpmManager.currentBPM {
-                        Text("\(bpm) BPM")
+                    if bpmManager.currentBPM > 0 {
+                        Text("\(bpmManager.currentBPM) BPM")
                             .font(.subheadline.bold())
                             .foregroundStyle(.white)
                     } else {

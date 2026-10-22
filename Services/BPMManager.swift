@@ -1,211 +1,134 @@
 import Foundation
-import HealthKit
 import CoreBluetooth
+import Combine
 
-public enum BPMDataSource: String, CaseIterable, Identifiable, Sendable {
-    case healthKit = "Apple Health (Apple Watch / AirPods)"
-    case bluetooth = "Bluetooth BLE (HR Monitor)"
-    
-    public var id: String { rawValue }
-}
+final class BPMManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeripheralDelegate {
+    static let shared = BPMManager()
 
-@Observable
-@MainActor
-public final class BPMManager: NSObject {
-    public static let shared = BPMManager()
+    @Published var currentBPM: Int = 0
+    @Published var isConnected: Bool = false
+    @Published var statusText: String = "Sin pulso"
 
-    public var currentBPM: Int?
-    public var dataSource: BPMDataSource = .healthKit {
-        didSet {
-            switchDataSource(to: dataSource)
-        }
-    }
-    public var isScanning = false
-    public var isConnected = false
-    public var peripheralName: String?
-    public var statusText: String = "Sin pulso" // Añadido
+    private var centralManager: CBCentralManager?
+    private var heartRatePeripheral: CBPeripheral?
 
-    // HealthKit
-    private let healthStore = HKHealthStore()
-    private var heartRateQuery: HKQuery?
-
-    // CoreBluetooth
-    private var centralManager: CBCentralManager!
-    private var connectedPeripheral: CBPeripheral?
-    private let heartRateServiceUUID = CBUUID(string: "180D")
-    private let heartRateMeasurementCharacteristicUUID = CBUUID(string: "2A37")
-
-    override private init() {
+    override init() {
         super.init()
-        centralManager = CBCentralManager(delegate: self, queue: nil)
-    }
-
-    public func requestPermissions() {
-        if HKHealthStore.isHealthDataAvailable() {
-            let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
-            let typesToRead: Set<HKObjectType> = [heartRateType]
-
-            healthStore.requestAuthorization(toShare: [], read: typesToRead) { [weak self] success, _ in
-                Task { @MainActor in
-                    if success, self?.dataSource == .healthKit {
-                        self?.startHealthKitQuery()
-                    }
-                }
-            }
+        // Inicialización tardía para asegurar permisos
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.centralManager = CBCentralManager(delegate: self, queue: nil)
         }
     }
 
-    public func reconnect() {
-        stopAll()
-        if dataSource == .bluetooth {
-            startBluetoothScanning()
-        } else {
-            startHealthKitQuery()
-        }
-    }
-
-    private func switchDataSource(to source: BPMDataSource) {
-        stopAll()
-        switch source {
-        case .healthKit:
-            startHealthKitQuery()
-        case .bluetooth:
-            startBluetoothScanning()
-        }
-    }
-
-    public func stopAll() {
-        if let query = heartRateQuery {
-            healthStore.stop(query)
-            heartRateQuery = nil
-        }
-        if centralManager.isScanning {
-            centralManager.stopScan()
-        }
-        if let peripheral = connectedPeripheral {
-            centralManager.cancelPeripheralConnection(peripheral)
-            connectedPeripheral = nil
-        }
-        isScanning = false
-        isConnected = false
-        currentBPM = nil
-        peripheralName = nil
-    }
-
-    // MARK: - HealthKit Integration
-    private func startHealthKitQuery() {
-        guard HKHealthStore.isHealthDataAvailable() else { return }
-        let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
-
-        let query = HKObserverQuery(sampleType: heartRateType, predicate: nil) { [weak self] _, completionHandler, error in
-            guard error == nil else {
-                completionHandler()
-                return
-            }
-            self?.fetchLatestHeartRateSample {
-                completionHandler()
-            }
-        }
-
-        healthStore.execute(query)
-        heartRateQuery = query
-        fetchLatestHeartRateSample {}
-    }
-
-    private func fetchLatestHeartRateSample(completion: @escaping () -> Void) {
-        let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
-        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
-        let query = HKSampleQuery(sampleType: heartRateType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { [weak self] _, results, error in
-            defer { completion() }
-            guard error == nil, let sample = results?.first as? HKQuantitySample else { return }
-            let bpm = Int(sample.quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute())))
-            Task { @MainActor in
-                self?.currentBPM = bpm
-            }
-        }
-        healthStore.execute(query)
-    }
-
-    // MARK: - CoreBluetooth Integration
-    public func startBluetoothScanning() {
-        // CORRECCIÓN: Asegurar estado .poweredOn antes de escanear
-        guard centralManager.state == .poweredOn else {
-            isScanning = false
-            statusText = "Bluetooth no listo"
+    func startScanning() {
+        guard let cm = centralManager else {
+            statusText = "Iniciando Bluetooth..."
             return
         }
-        isScanning = true
-        statusText = "Buscando..."
-        centralManager.scanForPeripherals(withServices: [heartRateServiceUUID], options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
+        switch cm.state {
+        case .poweredOn:
+            statusText = "Buscando..."
+            cm.scanForPeripherals(
+                withServices: [CBUUID(string: "180D")],
+                options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
+            )
+        case .unauthorized:
+            statusText = "Sin Permiso BT"
+        default:
+            statusText = "Bluetooth no listo"
+        }
     }
-}
 
-// MARK: - CBCentralManagerDelegate & CBPeripheralDelegate
-extension BPMManager: CBCentralManagerDelegate, CBPeripheralDelegate {
-    nonisolated public func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        Task { @MainActor in
-            // CORRECCIÓN: Iniciar escaneo automáticamente al estar listo
-            if central.state == .poweredOn, BPMManager.shared.dataSource == .bluetooth {
-                BPMManager.shared.startBluetoothScanning()
+    // Alias de compatibilidad con llamadas existentes
+    func startBluetoothScanning() {
+        startScanning()
+    }
+
+    func reconnect() {
+        centralManager?.stopScan()
+        if let peripheral = heartRatePeripheral {
+            centralManager?.cancelPeripheralConnection(peripheral)
+            heartRatePeripheral = nil
+        }
+        isConnected = false
+        currentBPM = 0
+        statusText = "Sin pulso"
+        startScanning()
+    }
+
+    func stopScanning() {
+        centralManager?.stopScan()
+        statusText = "Sin pulso"
+    }
+
+    func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            switch central.state {
+            case .poweredOn:
+                self.startScanning()
+            case .unauthorized:
+                self.statusText = "Sin Permiso BT"
+            case .poweredOff:
+                self.statusText = "BT Apagado"
+            default:
+                self.statusText = "Bluetooth no listo"
             }
         }
     }
 
-    nonisolated public func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
-        Task { @MainActor in
-            centralManager.stopScan()
-            isScanning = false
-            connectedPeripheral = peripheral
-            peripheral.delegate = self
-            centralManager.connect(peripheral, options: nil)
-            peripheralName = peripheral.name ?? "Dispositivo HR"
-            BPMManager.shared.statusText = "Conectando..."
+    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
+        heartRatePeripheral = peripheral
+        heartRatePeripheral?.delegate = self
+        central.stopScan()
+        central.connect(peripheral, options: nil)
+        DispatchQueue.main.async { [weak self] in
+            self?.statusText = "Conectando..."
         }
     }
 
-    nonisolated public func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        Task { @MainActor in
-            isConnected = true
-            peripheral.discoverServices([heartRateServiceUUID])
-            BPMManager.shared.statusText = "Conectado"
+    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        DispatchQueue.main.async { [weak self] in
+            self?.isConnected = true
+            self?.statusText = "Conectado"
         }
+        peripheral.discoverServices([CBUUID(string: "180D")])
     }
 
-    nonisolated public func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        Task { @MainActor in
-            isConnected = false
-            currentBPM = nil
-            BPMManager.shared.statusText = "Sin pulso"
-            // CORRECCIÓN: Reconexión automática al desconectar
-            if BPMManager.shared.dataSource == .bluetooth {
-                BPMManager.shared.startBluetoothScanning()
-            }
+    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isConnected = false
+            self.currentBPM = 0
+            self.statusText = "Sin pulso"
         }
+        heartRatePeripheral = nil
+        startScanning()
     }
 
-    nonisolated public func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+    func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard let services = peripheral.services else { return }
-        for service in services where service.uuid == heartRateServiceUUID {
-            peripheral.discoverCharacteristics([heartRateMeasurementCharacteristicUUID], for: service)
+        for service in services where service.uuid == CBUUID(string: "180D") {
+            peripheral.discoverCharacteristics([CBUUID(string: "2A37")], for: service)
         }
     }
 
-    nonisolated public func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
+    func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         guard let characteristics = service.characteristics else { return }
-        for characteristic in characteristics where characteristic.uuid == heartRateMeasurementCharacteristicUUID {
+        for characteristic in characteristics where characteristic.uuid == CBUUID(string: "2A37") {
             peripheral.setNotifyValue(true, for: characteristic)
         }
     }
 
-    nonisolated public func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
+    func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         guard let data = characteristic.value, !data.isEmpty else { return }
-        
         let buffer = [UInt8](data)
         let flags = buffer[0]
-        let isHRValue16Bit = (flags & 0x01) != 0
-        
+        let is16Bit = (flags & 0x01) != 0
+
         var bpm: Int = 0
-        if isHRValue16Bit {
+        if is16Bit {
             if buffer.count >= 3 {
                 bpm = Int(buffer[1]) | (Int(buffer[2]) << 8)
             }
@@ -214,25 +137,14 @@ extension BPMManager: CBCentralManagerDelegate, CBPeripheralDelegate {
                 bpm = Int(buffer[1])
             }
         }
-        
-        if bpm > 0 {
-            Task { @MainActor in
-                BPMManager.shared.currentBPM = bpm
-                BPMManager.shared.isConnected = true
-                BPMManager.shared.statusText = "\(bpm) BPM"
-            }
-        }
-    }
 
-    private nonisolated func parseHeartRate(from data: Data) -> Int {
-        let pointer = (data as NSData).bytes.assumingMemoryBound(to: UInt8.self)
-        let flags = pointer.pointee
-        let is16Bit = (flags & 0x01) != 0
-        if is16Bit {
-            let bpm16 = UnsafeRawPointer(pointer.advanced(by: 1)).load(as: UInt16.self)
-            return Int(UInt16(littleEndian: bpm16))
-        } else {
-            return Int(pointer.advanced(by: 1).pointee)
+        if bpm > 0 {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.currentBPM = bpm
+                self.isConnected = true
+                self.statusText = "\(bpm) BPM"
+            }
         }
     }
 }

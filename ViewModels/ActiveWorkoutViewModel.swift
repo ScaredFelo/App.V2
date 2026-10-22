@@ -24,6 +24,7 @@ public final class ActiveWorkoutViewModel {
     private var timerTask: Task<Void, Never>?
     private var bpmObserverTask: Task<Void, Never>?
     private var currentActivity: Activity<WorkoutActivityAttributes>?
+    private var cancellables = Set<AnyCancellable>()
 
     public struct SetInputState: Identifiable {
         public let id = UUID()
@@ -40,6 +41,7 @@ public final class ActiveWorkoutViewModel {
         self.session = session
         self.routine = routine
         setupInitialSets(modelContext: modelContext)
+        setupBPMObserver()
     }
 
     private func setupInitialSets(modelContext: ModelContext) {
@@ -146,7 +148,8 @@ public final class ActiveWorkoutViewModel {
             bpmObserverTask = Task {
                 while isResting {
                     updateLiveActivity()
-                    if let currentBPM = BPMManager.shared.currentBPM, currentBPM <= targetBpm {
+                    let currentBPM = BPMManager.shared.currentBPM
+                    if currentBPM > 0, currentBPM <= targetBpm {
                         finishRest()
                         break
                     }
@@ -207,6 +210,19 @@ public final class ActiveWorkoutViewModel {
         return session
     }
 
+    // MARK: - BPM Observer
+    private func setupBPMObserver() {
+        BPMManager.shared.$currentBPM
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newBPM in
+                guard let self, newBPM > 0 else { return }
+                Task { @MainActor in
+                    self.updateLiveActivity(bpm: newBPM)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
     // MARK: - ActivityKit (Live Activities / Dynamic Island)
     private func startLiveActivity(exerciseName: String, restCondition: RestCondition, timerEndDate: Date) {
         // Finalizar actividades previas antes de iniciar una nueva
@@ -223,7 +239,7 @@ public final class ActiveWorkoutViewModel {
         let state = WorkoutActivityAttributes.ContentState(
             timerEndDate: timerEndDate,
             sessionStartDate: session.startDate,
-            currentBPM: BPMManager.shared.currentBPM ?? 0,
+            currentBPM: BPMManager.shared.currentBPM,
             exerciseName: exerciseName,
             currentSet: currentSetIndex + 1
         )
@@ -243,6 +259,10 @@ public final class ActiveWorkoutViewModel {
     }
 
     private func updateLiveActivity() {
+        updateLiveActivity(bpm: BPMManager.shared.currentBPM)
+    }
+
+    private func updateLiveActivity(bpm: Int) {
         guard let activity = Activity<WorkoutActivityAttributes>.activities.first, let endDate = timerEndDate else { return }
         
         let currentSetIndex = session.setsCompleted.count
@@ -250,13 +270,13 @@ public final class ActiveWorkoutViewModel {
         let state = WorkoutActivityAttributes.ContentState(
             timerEndDate: endDate,
             sessionStartDate: session.startDate,
-            currentBPM: BPMManager.shared.currentBPM ?? 0,
+            currentBPM: bpm,
             exerciseName: currentExerciseName,
             currentSet: currentSetIndex + 1
         )
         
         Task {
-            await activity.update(ActivityContent(state: state, staleDate: nil))
+            await activity.update(ActivityContent(state: state, staleDate: endDate))
         }
     }
 
