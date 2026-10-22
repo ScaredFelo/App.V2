@@ -83,8 +83,10 @@ public struct MinimizedTimerView: View {
                 accessibilityLabel: "Omitir descanso"
             )
         }
+        .frame(height: 36)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .frame(height: 56)
         .background(Color.black)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(

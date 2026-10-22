@@ -88,11 +88,13 @@ public final class ActiveWorkoutViewModel {
             let matchingLog = pastLogs.indices.contains(i - 1) ? pastLogs[i - 1] : pastLogs.first
             let ghostW = matchingLog?.weight
             let ghostR = matchingLog?.reps
+            let initialWeight = routineExercise.defaultWeight > 0 ? routineExercise.defaultWeight : (ghostW ?? 0.0)
+            let initialReps = routineExercise.targetReps
 
             sets.append(SetInputState(
                 setNumber: i,
-                weight: routineExercise.defaultWeight > 0 ? routineExercise.defaultWeight : (ghostW ?? 0.0),
-                reps: routineExercise.targetReps,
+                weight: initialWeight,
+                reps: initialReps,
                 isCompleted: false,
                 ghostWeight: ghostW,
                 ghostReps: ghostR
@@ -179,6 +181,10 @@ public final class ActiveWorkoutViewModel {
         return false
     }
 
+    public var hasWorkoutChanges: Bool {
+        hasRoutineChanged
+    }
+
     private func restoreOriginalStructure(modelContext: ModelContext) {
         let currentExercises = routine.exercises
         for routineExercise in currentExercises where addedRoutineExerciseIDs.contains(routineExercise.id) {
@@ -256,6 +262,7 @@ public final class ActiveWorkoutViewModel {
         stopRest()
         isResting = true
         isRestPaused = false
+        isTimerMinimized = false
         currentRestCondition = condition
         currentExerciseName = exerciseName
 

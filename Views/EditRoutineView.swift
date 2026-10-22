@@ -10,6 +10,7 @@ struct EditRoutineView: View {
 
     @State private var showingExercisePicker = false
     @State private var exercisePendingRemoval: RoutineExercise?
+    @State private var exerciseToConfigure: Exercise?
 
     private var sortedExercises: [RoutineExercise] {
         routine.exercises.sorted { $0.sortOrder < $1.sortOrder }
@@ -17,6 +18,22 @@ struct EditRoutineView: View {
 
     var body: some View {
         Form {
+            Section {
+                HStack(spacing: 12) {
+                    Image(systemName: "pencil.and.list.clipboard")
+                        .font(.title3)
+                        .foregroundStyle(.green)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("MODO EDICIÓN")
+                            .font(.caption.bold())
+                            .foregroundStyle(.green)
+                        Text("Los cambios se guardan en esta rutina, no en el entrenamiento activo.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
             Section("Nombre de la rutina") {
                 TextField("Nombre", text: $routine.name)
             }
@@ -32,7 +49,10 @@ struct EditRoutineView: View {
                     Section {
                         RoutineExerciseEditorRow(
                             routineExercise: routineExercise,
-                            exercises: exercises
+                            exercises: exercises,
+                            onConfigure: { exercise in
+                                exerciseToConfigure = exercise
+                            }
                         )
                     } header: {
                         HStack {
@@ -87,6 +107,9 @@ struct EditRoutineView: View {
                 try? modelContext.save()
             }
         }
+        .sheet(item: $exerciseToConfigure) { exercise in
+            ExerciseSettingsView(exercise: exercise)
+        }
         .alert(
             "Eliminar ejercicio",
             isPresented: Binding(
@@ -119,14 +142,39 @@ struct EditRoutineView: View {
 private struct RoutineExerciseEditorRow: View {
     @Bindable var routineExercise: RoutineExercise
     let exercises: [Exercise]
+    let onConfigure: (Exercise) -> Void
 
     @State private var notesExpanded = false
 
+    private var exerciseNameBinding: Binding<String> {
+        Binding(
+            get: { routineExercise.exercise?.name ?? "" },
+            set: { routineExercise.exercise?.name = $0 }
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Ejercicio")
-                Spacer()
+            HStack(spacing: 8) {
+                TextField("Nombre del ejercicio", text: exerciseNameBinding)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(routineExercise.exercise == nil)
+
+                if let exercise = routineExercise.exercise {
+                    Button {
+                        onConfigure(exercise)
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.subheadline)
+                            .foregroundStyle(.green)
+                            .frame(width: 32, height: 32)
+                            .background(Color.green.opacity(0.15))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Configuración del ejercicio")
+                }
+
                 Menu {
                     ForEach(exercises) { exercise in
                         Button {
@@ -140,14 +188,28 @@ private struct RoutineExerciseEditorRow: View {
                         }
                     }
                 } label: {
-                    HStack(spacing: 4) {
-                        Text(routineExercise.exercise?.name ?? "Seleccionar")
-                            .lineLimit(1)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.caption2)
-                    }
-                    .foregroundStyle(.green)
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.green)
+                        .frame(width: 32, height: 32)
+                        .background(Color.green.opacity(0.15))
+                        .clipShape(Circle())
                 }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Cambiar ejercicio")
+            }
+
+            if let exercise = routineExercise.exercise {
+                HStack(spacing: 10) {
+                    Label(exercise.muscleGroup.rawValue, systemImage: "figure.strengthtraining.traditional")
+                    Label(exercise.equipmentType.rawValue, systemImage: "dumbbell.fill")
+                    if exercise.requiresStraps {
+                        Label("Straps", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
             Stepper("Series: \(routineExercise.defaultSets)", value: $routineExercise.defaultSets, in: 1...12)

@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 import SwiftData
 
@@ -6,12 +7,12 @@ public struct ActiveWorkoutView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var viewModel: ActiveWorkoutViewModel
-    @State private var showingFinishConfirmation = false
     @State private var showingCancelConfirmation = false
     @State private var showingRoutineChangeOptions = false
     @State private var showingNewRoutineNameAlert = false
     @State private var showingExercisePicker = false
     @State private var exercisePendingRemoval: RoutineExercise?
+    @State private var pendingNewRoutinePromptID: UUID?
     @State private var newRoutineName = ""
     @ObservedObject private var bpmManager = BPMManager.shared
 
@@ -69,10 +70,11 @@ public struct ActiveWorkoutView: View {
 
                     // Finish Workout Button
                     Button(action: {
-                        if viewModel.hasRoutineChanged {
+                        if viewModel.hasWorkoutChanges {
                             showingRoutineChangeOptions = true
                         } else {
-                            showingFinishConfirmation = true
+                            _ = viewModel.finishWorkout(modelContext: modelContext)
+                            dismiss()
                         }
                     }) {
                         Text("Finalizar Entrenamiento")
@@ -96,46 +98,25 @@ public struct ActiveWorkoutView: View {
                             .background(Color.red.opacity(0.12))
                             .cornerRadius(12)
                     }
-                    .padding(.bottom, 140)
+                    .padding(.bottom, 24)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 20)
             }
 
             // Floating Rest UI
-            if viewModel.isResting {
-                if !viewModel.isTimerMinimized {
-                    ZStack {
-                        Color.black.ignoresSafeArea()
+            if viewModel.isResting && !viewModel.isTimerMinimized {
+                ZStack {
+                    Color.black.ignoresSafeArea()
 
-                        VStack {
-                            Spacer()
-                            CircularTimerView(
-                                timeRemaining: viewModel.restTimeRemaining,
-                                totalSeconds: viewModel.totalRestSeconds,
-                                isPaused: viewModel.isRestPaused,
-                                onAdd10: { viewModel.add10Seconds() },
-                                onSub10: { viewModel.sub10Seconds() },
-                                onTogglePause: {
-                                    if viewModel.isRestPaused {
-                                        viewModel.resumeRest()
-                                    } else {
-                                        viewModel.pauseRest()
-                                    }
-                                },
-                                onSkip: { viewModel.skipRest() },
-                                onMinimize: { viewModel.isTimerMinimized = true }
-                            )
-                            Spacer()
-                        }
-                    }
-                } else {
                     VStack {
                         Spacer()
-                        MinimizedTimerView(
+                        CircularTimerView(
                             timeRemaining: viewModel.restTimeRemaining,
+                            totalSeconds: viewModel.totalRestSeconds,
                             isPaused: viewModel.isRestPaused,
-                            onExpand: { viewModel.isTimerMinimized = false },
+                            onAdd10: { viewModel.add10Seconds() },
+                            onSub10: { viewModel.sub10Seconds() },
                             onTogglePause: {
                                 if viewModel.isRestPaused {
                                     viewModel.resumeRest()
@@ -143,17 +124,10 @@ public struct ActiveWorkoutView: View {
                                     viewModel.pauseRest()
                                 }
                             },
-                            onAdd10: { viewModel.add10Seconds() },
-                            onSub10: { viewModel.sub10Seconds() },
-                            onSkip: { viewModel.skipRest() }
+                            onSkip: { viewModel.skipRest() },
+                            onMinimize: { viewModel.isTimerMinimized = true }
                         )
-                        .padding(.bottom, 12)
-                        .allowsHitTesting(true)
-                    }
-                    .background(alignment: .bottom) {
-                        Color.black
-                            .frame(height: 96)
-                            .ignoresSafeArea(edges: .bottom)
+                        Spacer()
                     }
                 }
             }
@@ -161,30 +135,31 @@ public struct ActiveWorkoutView: View {
         .onAppear {
             bpmManager.startScanning()
         }
+        .onDisappear {
+            pendingNewRoutinePromptID = nil
+        }
         .navigationBarHidden(true)
         .interactiveDismissDisabled(true)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            workoutFooter
+        }
         .sheet(isPresented: $showingExercisePicker) {
             ExercisePickerView { exercise in
                 _ = viewModel.addExercise(exercise, modelContext: modelContext)
             }
         }
-        .alert("¿Finalizar entrenamiento?", isPresented: $showingFinishConfirmation) {
-            Button("Finalizar", role: .destructive) {
-                _ = viewModel.finishWorkout(modelContext: modelContext)
-                dismiss()
-            }
-            Button("Cancelar", role: .cancel) {}
-        } message: {
-            Text("¿Estás seguro de que deseas finalizar la sesión actual?")
-        }
-        .alert("La rutina ha cambiado", isPresented: $showingRoutineChangeOptions) {
+        .alert("¿Guardar cambios?", isPresented: $showingRoutineChangeOptions) {
             Button("Reemplazar rutina actual", role: .destructive) {
                 _ = viewModel.finishWorkoutReplacingRoutine(modelContext: modelContext)
                 dismiss()
             }
             Button("Guardar como nueva rutina") {
                 newRoutineName = "\(viewModel.routine.name) (modificada)"
+                let promptID = UUID()
+                pendingNewRoutinePromptID = promptID
+
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    guard pendingNewRoutinePromptID == promptID else { return }
                     showingNewRoutineNameAlert = true
                 }
             }
@@ -194,7 +169,7 @@ public struct ActiveWorkoutView: View {
             }
             Button("Cancelar", role: .cancel) {}
         } message: {
-            Text("Has modificado la rutina durante el entrenamiento. ¿Qué quieres hacer con los cambios?")
+            Text("Has añadido, quitado o modificado datos respecto a la rutina original. ¿Qué quieres hacer con los cambios?")
         }
         .alert("Nueva rutina", isPresented: $showingNewRoutineNameAlert) {
             TextField("Nombre de la rutina", text: $newRoutineName)
@@ -208,6 +183,9 @@ public struct ActiveWorkoutView: View {
         }
         .alert("¿Cancelar entrenamiento?", isPresented: $showingCancelConfirmation) {
             Button("Cancelar entrenamiento", role: .destructive) {
+                pendingNewRoutinePromptID = nil
+                showingRoutineChangeOptions = false
+                showingNewRoutineNameAlert = false
                 viewModel.cancelWorkout(modelContext: modelContext)
                 dismiss()
             }
@@ -234,6 +212,33 @@ public struct ActiveWorkoutView: View {
         }
     }
 
+    private var workoutFooter: some View {
+        ZStack {
+            Color.black
+
+            if viewModel.isResting && viewModel.isTimerMinimized {
+                MinimizedTimerView(
+                    timeRemaining: viewModel.restTimeRemaining,
+                    isPaused: viewModel.isRestPaused,
+                    onExpand: { viewModel.isTimerMinimized = false },
+                    onTogglePause: {
+                        if viewModel.isRestPaused {
+                            viewModel.resumeRest()
+                        } else {
+                            viewModel.pauseRest()
+                        }
+                    },
+                    onAdd10: { viewModel.add10Seconds() },
+                    onSub10: { viewModel.sub10Seconds() },
+                    onSkip: { viewModel.skipRest() }
+                )
+            }
+        }
+        .frame(height: 72)
+        .frame(maxWidth: .infinity)
+        .background(Color.black)
+    }
+
     private var workoutHeader: some View {
         HStack(spacing: 10) {
             Button {
@@ -249,6 +254,9 @@ public struct ActiveWorkoutView: View {
             .accessibilityLabel("Cancelar entrenamiento")
 
             VStack(alignment: .leading, spacing: 2) {
+                Text("MODO ENTRENAMIENTO")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.green)
                 Text(viewModel.routine.name)
                     .font(.headline)
                     .foregroundStyle(.white)
@@ -367,7 +375,7 @@ struct ExerciseCardView: View {
                 Text("REPS")
                     .frame(width: 50, alignment: .center)
                 Text("OK")
-                    .frame(width: 40, alignment: .center)
+                    .frame(width: 32, alignment: .center)
             }
             .font(.caption2.bold())
             .foregroundStyle(.secondary)
@@ -472,11 +480,11 @@ struct SetRowView: View {
             // Checkmark Button
             Button(action: onToggle) {
                 Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
+                    .font(.body)
                     .foregroundStyle(set.isCompleted ? .green : .gray)
-                    .frame(width: 40, height: 32)
+                    .frame(width: 30, height: 28)
             }
-            .frame(width: 40, alignment: .center)
+            .frame(width: 32, alignment: .center)
             .accessibilityLabel(set.isCompleted ? "Serie completada" : "Marcar serie como completada")
         }
         .padding(.horizontal, 6)
