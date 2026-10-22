@@ -6,6 +6,7 @@ public struct ActiveWorkoutView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var viewModel: ActiveWorkoutViewModel
+    @State private var showingFinishConfirmation = false
     private let bpmManager = BPMManager.shared
 
     public init(session: WorkoutSession, routine: Routine, modelContext: ModelContext) {
@@ -17,10 +18,10 @@ public struct ActiveWorkoutView: View {
             Color.black.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Header Status & BPM
+                // Header Status & BPM Indicator
                 workoutHeader
 
-                // Exercises List
+                // Exercises List & Finish Button at the bottom
                 ScrollView {
                     LazyVStack(spacing: 24) {
                         ForEach(viewModel.routine.exercises.sorted(by: { $0.sortOrder < $1.sortOrder })) { routineExercise in
@@ -42,21 +43,53 @@ public struct ActiveWorkoutView: View {
                                 )
                             }
                         }
+
+                        // Finish Workout Button moved to the bottom of the list
+                        Button(action: {
+                            showingFinishConfirmation = true
+                        }) {
+                            Text("Finalizar Entrenamiento")
+                                .font(.headline)
+                                .foregroundColor(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.white)
+                                .cornerRadius(12)
+                        }
+                        .padding(.top, 16)
+                        .padding(.bottom, 32)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 20)
                 }
-
-                // Finish Workout Button
-                finishButton
             }
 
-            // Rest Overlay Banner
+            // Rest Overlay Banner with Circular Timer
             if viewModel.isResting {
-                RestOverlayBanner(viewModel: viewModel)
+                ZStack {
+                    Color.black.opacity(0.85).ignoresSafeArea()
+                    CircularTimerView(
+                        timeRemaining: viewModel.restTimeRemaining,
+                        totalSeconds: viewModel.totalRestSeconds,
+                        onAdd10: { viewModel.add10Seconds() },
+                        onSub10: { viewModel.sub10Seconds() },
+                        onSkip: { viewModel.skipRest() }
+                    )
+                }
+                .transition(.opacity)
+                .animation(.easeInOut, value: viewModel.isResting)
             }
         }
         .navigationBarHidden(true)
+        .alert("¿Finalizar entrenamiento?", isPresented: $showingFinishConfirmation) {
+            Button("Finalizar", role: .destructive) {
+                _ = viewModel.finishWorkout(modelContext: modelContext)
+                dismiss()
+            }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("¿Estás seguro de que deseas finalizar la sesión actual?")
+        }
     }
 
     private var workoutHeader: some View {
@@ -72,40 +105,34 @@ public struct ActiveWorkoutView: View {
 
             Spacer()
 
-            // Live BPM Pill
-            HStack(spacing: 6) {
-                Image(systemName: "heart.fill")
-                    .foregroundStyle(.red)
-                Text(bpmManager.currentBPM != nil ? "\(bpmManager.currentBPM!) BPM" : "-- BPM")
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.white)
+            // Live BPM Pill with tap to reconnect
+            Button(action: {
+                bpmManager.reconnect()
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "heart.fill")
+                        .foregroundStyle(bpmManager.currentBPM != nil ? .red : .gray)
+                        .symbolEffect(.pulse, isActive: bpmManager.currentBPM != nil)
+                    
+                    if let bpm = bpmManager.currentBPM {
+                        Text("\(bpm) BPM")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.white)
+                    } else {
+                        Text(bpmManager.isScanning ? "Buscando..." : "Sin pulso")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color(.systemGray6).opacity(0.3))
+                .cornerRadius(20)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Color(.systemGray6).opacity(0.3))
-            .cornerRadius(20)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(Color.black.opacity(0.8))
-    }
-
-    private var finishButton: some View {
-        Button(action: {
-            _ = viewModel.finishWorkout(modelContext: modelContext)
-            dismiss()
-        }) {
-            Text("Finalizar Entrenamiento")
-                .font(.headline)
-                .foregroundColor(.black)
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.white)
-                .cornerRadius(12)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(Color.black)
     }
 }
 
@@ -238,63 +265,5 @@ struct SetRowView: View {
     private var ghostText: String {
         guard let gw = set.ghostWeight, let gr = set.ghostReps else { return "—" }
         return "\(String(format: "%.0f", gw))kg × \(gr)"
-    }
-}
-
-// MARK: - Rest Overlay Banner
-struct RestOverlayBanner: View {
-    var viewModel: ActiveWorkoutViewModel
-
-    var body: some View {
-        VStack {
-            Spacer()
-
-            VStack(spacing: 12) {
-                Text(viewModel.currentRestModeTitle)
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.secondary)
-
-                if viewModel.restTargetBpm != nil {
-                    HStack(spacing: 8) {
-                        Image(systemName: "heart.fill")
-                            .foregroundStyle(.red)
-                            .symbolEffect(.pulse)
-                        Text(BPMManager.shared.currentBPM != nil ? "\(BPMManager.shared.currentBPM!) BPM" : "-- BPM")
-                            .font(.system(size: 36, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                    }
-                } else {
-                    Text(timeFormatted(viewModel.restTimeRemaining))
-                        .font(.system(size: 42, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                }
-
-                Button(action: {
-                    viewModel.skipRest()
-                }) {
-                    Text("Saltar Descanso")
-                        .font(.subheadline.bold())
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 10)
-                        .background(Color.white)
-                        .cornerRadius(20)
-                }
-            }
-            .padding(24)
-            .frame(maxWidth: .infinity)
-            .background(Color(.systemGray6).opacity(0.95))
-            .cornerRadius(24)
-            .padding(.horizontal, 20)
-            .padding(.bottom, 40)
-        }
-        .transition(.move(edge: .bottom))
-        .animation(.easeInOut, value: viewModel.isResting)
-    }
-
-    private func timeFormatted(_ seconds: Int) -> String {
-        let minutes = seconds / 60
-        let secs = seconds % 60
-        return String(format: "%d:%02d", minutes, secs)
     }
 }

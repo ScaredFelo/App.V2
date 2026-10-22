@@ -9,7 +9,7 @@ import ActivityKit
 public final class ActiveWorkoutViewModel {
     public var session: WorkoutSession
     public var routine: Routine
-    public var activeSets: [UUID: [SetInputState]] = [:] // RoutineExercise.id -> sets
+    public var activeSets: [UUID: [SetInputState]] = [:]
     
     // Rest Timer State
     public var isResting = false
@@ -18,6 +18,7 @@ public final class ActiveWorkoutViewModel {
     public var restTargetBpm: Int?
     public var currentRestModeTitle = ""
     public var currentExerciseName = ""
+    public var timerEndDate: Date?
     
     private var timerTask: Task<Void, Never>?
     private var bpmObserverTask: Task<Void, Never>?
@@ -111,17 +112,21 @@ public final class ActiveWorkoutViewModel {
         case .timer(let seconds):
             totalRestSeconds = seconds
             restTimeRemaining = seconds
+            timerEndDate = Date().addingTimeInterval(Double(seconds))
             currentRestModeTitle = "Descanso (\(seconds)s)"
             
             timerTask = Task {
-                while restTimeRemaining > 0 {
+                while let endDate = timerEndDate {
+                    let remaining = Int(endDate.timeIntervalSinceNow)
+                    restTimeRemaining = max(0, remaining)
+                    updateLiveActivity()
+                    
+                    if restTimeRemaining <= 0 {
+                        finishRest()
+                        break
+                    }
                     try? await Task.sleep(nanoseconds: 1_000_000_000)
                     if Task.isCancelled { break }
-                    restTimeRemaining -= 1
-                    updateLiveActivity()
-                }
-                if restTimeRemaining <= 0 {
-                    finishRest()
                 }
             }
 
@@ -143,6 +148,29 @@ public final class ActiveWorkoutViewModel {
         }
     }
 
+    public func add10Seconds() {
+        guard let endDate = timerEndDate else { return }
+        let newEndDate = endDate.addingTimeInterval(10)
+        timerEndDate = newEndDate
+        totalRestSeconds += 10
+        restTimeRemaining = Int(newEndDate.timeIntervalSinceNow)
+        updateLiveActivity()
+    }
+
+    public func sub10Seconds() {
+        guard let endDate = timerEndDate else { return }
+        let newEndDate = endDate.addingTimeInterval(-10)
+        let remaining = Int(newEndDate.timeIntervalSinceNow)
+        if remaining <= 0 {
+            finishRest()
+        } else {
+            timerEndDate = newEndDate
+            totalRestSeconds = max(10, totalRestSeconds - 10)
+            restTimeRemaining = remaining
+            updateLiveActivity()
+        }
+    }
+
     public func skipRest() {
         finishRest()
     }
@@ -159,6 +187,7 @@ public final class ActiveWorkoutViewModel {
         bpmObserverTask = nil
         isResting = false
         restTargetBpm = nil
+        timerEndDate = nil
         endLiveActivity()
     }
 

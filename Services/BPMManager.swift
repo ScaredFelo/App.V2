@@ -54,6 +54,15 @@ public final class BPMManager: NSObject {
         }
     }
 
+    public func reconnect() {
+        stopAll()
+        if dataSource == .bluetooth {
+            startBluetoothScanning()
+        } else {
+            startHealthKitQuery()
+        }
+    }
+
     private func switchDataSource(to source: BPMDataSource) {
         stopAll()
         switch source {

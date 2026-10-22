@@ -1,0 +1,98 @@
+import SwiftUI
+
+public struct CircularTimerView: View {
+    public let timeRemaining: Int
+    public let totalSeconds: Int
+    public let onAdd10: () -> Void
+    public let onSub10: () -> Void
+    public let onSkip: () -> Void
+
+    private var progress: Double {
+        guard totalSeconds > 0 else { return 0 }
+        return Double(max(0, timeRemaining)) / Double(totalSeconds)
+    }
+
+    public init(
+        timeRemaining: Int,
+        totalSeconds: Int,
+        onAdd10: @escaping () -> Void,
+        onSub10: @escaping () -> Void,
+        onSkip: @escaping () -> Void
+    ) {
+        self.timeRemaining = timeRemaining
+        self.totalSeconds = totalSeconds
+        self.onAdd10 = onAdd10
+        self.onSub10 = onSub10
+        self.onSkip = onSkip
+    }
+
+    public var body: some View {
+        VStack(spacing: 20) {
+            ZStack {
+                // Background Track
+                Circle()
+                    .stroke(Color(.systemGray6), lineWidth: 12)
+                
+                // Progress Arc
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(Color.green, style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(.linear(duration: 1.0), value: progress)
+
+                // Time Display
+                VStack(spacing: 4) {
+                    Text("DESCANSO")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                    Text(timeFormatted(timeRemaining))
+                        .font(.system(size: 42, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                }
+            }
+            .frame(width: 180, height: 180)
+
+            // Adjust Controls (+10s / -10s)
+            HStack(spacing: 20) {
+                Button(action: onSub10) {
+                    Text("-10s")
+                        .font(.subheadline.bold())
+                        .foregroundColor(.white)
+                        .frame(width: 60, height: 36)
+                        .background(Color(.systemGray6).opacity(0.3))
+                        .cornerRadius(18)
+                }
+
+                Button(action: onAdd10) {
+                    Text("+10s")
+                        .font(.subheadline.bold())
+                        .foregroundColor(.white)
+                        .frame(width: 60, height: 36)
+                        .background(Color(.systemGray6).opacity(0.3))
+                        .cornerRadius(18)
+                }
+            }
+
+            // Skip Button
+            Button(action: onSkip) {
+                Text("Omitir Descanso")
+                    .font(.subheadline.bold())
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.white)
+                    .cornerRadius(12)
+            }
+        }
+        .padding(24)
+        .background(Color.black.opacity(0.95))
+        .cornerRadius(24)
+        .padding(.horizontal, 20)
+    }
+
+    private func timeFormatted(_ seconds: Int) -> String {
+        let minutes = max(0, seconds) / 60
+        let secs = max(0, seconds) % 60
+        return String(format: "%d:%02d", minutes, secs)
+    }
+}
