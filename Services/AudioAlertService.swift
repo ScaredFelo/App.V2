@@ -28,8 +28,8 @@ public final class AudioAlertService {
         guard seconds > 0 else { return }
 
         let content = UNMutableNotificationContent()
-        content.title = "Descanso terminado"
-        content.body = "Es hora de la siguiente serie."
+        content.title = "Es hora de dar-le"
+        content.body = "Es hora de dar-le"
         content.sound = .default
         content.interruptionLevel = .timeSensitive
 

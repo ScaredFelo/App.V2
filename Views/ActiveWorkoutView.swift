@@ -14,7 +14,6 @@ public struct ActiveWorkoutView: View {
     @State private var exercisePendingRemoval: RoutineExercise?
     @State private var pendingNewRoutinePromptID: UUID?
     @State private var newRoutineName = ""
-    @ObservedObject private var bpmManager = BPMManager.shared
 
     public init(session: WorkoutSession, routine: Routine, modelContext: ModelContext) {
         _viewModel = State(initialValue: ActiveWorkoutViewModel(session: session, routine: routine, modelContext: modelContext))
@@ -133,7 +132,7 @@ public struct ActiveWorkoutView: View {
             }
         }
         .onAppear {
-            bpmManager.startScanning()
+            BPMManager.shared.startScanning()
         }
         .onDisappear {
             pendingNewRoutinePromptID = nil
@@ -254,51 +253,16 @@ public struct ActiveWorkoutView: View {
             .accessibilityLabel("Cancelar entrenamiento")
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("MODO ENTRENAMIENTO")
-                    .font(.caption2.bold())
-                    .foregroundStyle(.green)
                 Text(viewModel.routine.name)
                     .font(.headline)
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                Text("Volumen: \(Int(viewModel.session.totalVolumeKg)) kg")
+                Text("\(Int(viewModel.session.totalVolumeKg)) kg")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
-
-            // Live BPM Pill with tap to reconnect/scan
-            Button(action: {
-                if bpmManager.currentBPM == 0 {
-                    bpmManager.startScanning()
-                } else {
-                    bpmManager.reconnect()
-                }
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "heart.fill")
-                        .foregroundStyle(bpmManager.currentBPM > 0 ? .red : .gray)
-                        .symbolEffect(.pulse, isActive: bpmManager.currentBPM > 0)
-
-                    if bpmManager.currentBPM > 0 {
-                        Text("\(bpmManager.currentBPM) BPM")
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                    } else {
-                        Text(bpmManager.statusText) // Usar statusText del gestor
-                            .font(.caption.bold())
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color(.systemGray6).opacity(0.3))
-                .cornerRadius(20)
-            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)

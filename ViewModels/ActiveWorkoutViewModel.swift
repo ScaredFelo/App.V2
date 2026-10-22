@@ -222,10 +222,11 @@ public final class ActiveWorkoutViewModel {
 
     public func toggleSetCompletion(for routineExerciseID: UUID, setIndex: Int, modelContext: ModelContext) {
         guard var sets = activeSets[routineExerciseID], sets.indices.contains(setIndex) else { return }
-        sets[setIndex].isCompleted.toggle()
-        activeSets[routineExerciseID] = sets
 
-        if sets[setIndex].isCompleted {
+        let isNowCompleted = !sets[setIndex].isCompleted
+        sets[setIndex].isCompleted = isNowCompleted
+
+        if isNowCompleted {
             let targetSet = sets[setIndex]
             let routineExercise = routine.exercises.first(where: { $0.id == routineExerciseID })
             let exercise = routineExercise?.exercise
@@ -240,6 +241,8 @@ public final class ActiveWorkoutViewModel {
             )
             modelContext.insert(log)
             session.setsCompleted.append(log)
+            sets[setIndex].existingLog = log
+            activeSets[routineExerciseID] = sets
             session.totalVolumeKg += (targetSet.weight * Double(targetSet.reps))
             try? modelContext.save()
 
@@ -253,6 +256,22 @@ public final class ActiveWorkoutViewModel {
                 currentExerciseName = exercise.name
                 startRest(with: condition, exerciseName: exercise.name)
             }
+        } else {
+            let targetSet = sets[setIndex]
+            let volumeToSubtract: Double
+
+            if let log = targetSet.existingLog {
+                volumeToSubtract = log.weight * Double(log.reps)
+                session.setsCompleted.removeAll { $0.id == log.id }
+                modelContext.delete(log)
+            } else {
+                volumeToSubtract = targetSet.weight * Double(targetSet.reps)
+            }
+
+            sets[setIndex].existingLog = nil
+            activeSets[routineExerciseID] = sets
+            session.totalVolumeKg = max(0, session.totalVolumeKg - volumeToSubtract)
+            try? modelContext.save()
         }
     }
 
@@ -272,7 +291,7 @@ public final class ActiveWorkoutViewModel {
             restTimeRemaining = seconds
             currentRestModeTitle = "Descanso (\(seconds)s)"
             timerEndDate = Date().addingTimeInterval(Double(seconds))
-            startLiveActivity(exerciseName: exerciseName, timerEndDate: timerEndDate!)
+            startLiveActivity(exerciseName: exerciseName, timerEndDate: timerEndDate!, totalDuration: seconds)
             AudioAlertService.shared.scheduleRestFinishedNotification(after: seconds)
             startTimerCountdown()
 
@@ -280,7 +299,7 @@ public final class ActiveWorkoutViewModel {
             restTargetBpm = targetBpm
             currentRestModeTitle = "Esperando recuperación (< \(targetBpm) BPM)"
             timerEndDate = Date()
-            startLiveActivity(exerciseName: exerciseName, timerEndDate: timerEndDate!)
+            startLiveActivity(exerciseName: exerciseName, timerEndDate: timerEndDate!, totalDuration: 0)
             startBpmRecoveryObserver(targetBpm: targetBpm)
         }
     }
@@ -395,13 +414,13 @@ public final class ActiveWorkoutViewModel {
                 return
             }
             timerEndDate = Date().addingTimeInterval(Double(restTimeRemaining))
-            startLiveActivity(exerciseName: currentExerciseName, timerEndDate: timerEndDate!)
+            startLiveActivity(exerciseName: currentExerciseName, timerEndDate: timerEndDate!, totalDuration: totalRestSeconds)
             AudioAlertService.shared.scheduleRestFinishedNotification(after: restTimeRemaining)
             startTimerCountdown()
 
         case .bpmDrop(let targetBpm):
             timerEndDate = Date()
-            startLiveActivity(exerciseName: currentExerciseName, timerEndDate: timerEndDate!)
+            startLiveActivity(exerciseName: currentExerciseName, timerEndDate: timerEndDate!, totalDuration: 0)
             startBpmRecoveryObserver(targetBpm: targetBpm)
         }
     }
@@ -499,7 +518,7 @@ public final class ActiveWorkoutViewModel {
     }
 
     // MARK: - ActivityKit (Live Activities / Dynamic Island)
-    private func startLiveActivity(exerciseName: String, timerEndDate: Date) {
+    private func startLiveActivity(exerciseName: String, timerEndDate: Date, totalDuration: Int) {
         // Finalizar actividades previas antes de iniciar una nueva
         for activity in Activity<WorkoutActivityAttributes>.activities {
             Task { await activity.end(dismissalPolicy: .immediate) }
@@ -512,6 +531,7 @@ public final class ActiveWorkoutViewModel {
 
         let state = WorkoutActivityAttributes.ContentState(
             timerEndDate: timerEndDate,
+            totalDuration: totalDuration,
             sessionStartDate: session.startDate,
             currentBPM: BPMManager.shared.currentBPM,
             exerciseName: exerciseName,
@@ -545,6 +565,7 @@ public final class ActiveWorkoutViewModel {
 
         let state = WorkoutActivityAttributes.ContentState(
             timerEndDate: endDate,
+            totalDuration: totalRestSeconds,
             sessionStartDate: session.startDate,
             currentBPM: bpm,
             exerciseName: currentExerciseName,

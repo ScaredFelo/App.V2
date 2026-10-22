@@ -45,7 +45,7 @@ struct WorkoutLiveActivityWidget: Widget {
                 
                 // Barra de progreso sin etiquetas duplicadas
                 VStack(spacing: 4) {
-                    ProgressView(timerInterval: Date()...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
+                    ProgressView(timerInterval: context.state.timerStartDate...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
                         .progressViewStyle(.linear)
                         .tint(.green)
                     
@@ -110,7 +110,7 @@ struct WorkoutLiveActivityWidget: Widget {
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 6) {
                         // Ocultamos las etiquetas internas de ProgressView para no duplicar números
-                        ProgressView(timerInterval: Date()...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
+                        ProgressView(timerInterval: context.state.timerStartDate...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
                             .progressViewStyle(.linear)
                             .tint(.green)
                         
@@ -148,7 +148,7 @@ struct WorkoutLiveActivityWidget: Widget {
             } compactTrailing: {
                 // Modo Compacto Derecha (Barra centrada y alineada + un único temporizador)
                 HStack(spacing: 6) {
-                    ProgressView(timerInterval: Date()...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
+                    ProgressView(timerInterval: context.state.timerStartDate...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
                         .progressViewStyle(.linear)
                         .tint(.green)
                         .frame(width: 38)
@@ -161,7 +161,7 @@ struct WorkoutLiveActivityWidget: Widget {
                         .minimumScaleFactor(0.8)
                 }
             } minimal: {
-                ProgressView(timerInterval: Date()...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
+                ProgressView(timerInterval: context.state.timerStartDate...context.state.timerEndDate, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
                     .progressViewStyle(.linear)
                     .tint(.green)
                     .frame(width: 18)
