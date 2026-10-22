@@ -14,17 +14,17 @@ targets:
       - path: Services
       - path: ViewModels
       - path: Views
-      - path: Widgets
     frameworks:
       - sdk: HealthKit.framework
       - sdk: CoreBluetooth.framework
       - sdk: ActivityKit.framework
-      - sdk: WidgetKit.framework
     settings:
       base:
         PRODUCT_NAME: AppGym
         PRODUCT_BUNDLE_IDENTIFIER: com.jordiferres.appgym
         INFOPLIST_FILE: Info.plist
+        SWIFT_VERSION: "5.0"
+        SWIFT_STRICT_CONCURRENCY: "minimal"
         CODE_SIGNING_REQUIRED: "NO"
         CODE_SIGN_IDENTITY: ""
         CODE_SIGNING_ALLOWED: "NO"

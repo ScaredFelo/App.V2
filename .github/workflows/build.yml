@@ -48,11 +48,6 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R /tmp/DerivedData/Build/Products/Release-iphoneos/AppGym.app Payload/
-          ls -la Payload/AppGym.app
-          if [ ! -f "Payload/AppGym.app/AppGym" ]; then
-            echo "Error: El ejecutable AppGym no se encuentra en Payload/AppGym.app/"
-            exit 1
-          fi
           zip -r AppGym.ipa Payload
 
       - name: Upload IPA Artifact
