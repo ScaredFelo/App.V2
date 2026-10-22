@@ -23,7 +23,7 @@ struct AppGymApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ExerciseListView()
+            MainTabView()
                 .onAppear {
                     let context = container.mainContext
                     MockDataGenerator.seedIfNeeded(context: context)

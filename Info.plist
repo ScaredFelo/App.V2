@@ -17,10 +17,12 @@
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>NSHealthShareUsageDescription</key>
-    <string>Necesitamos acceso a HealthKit para monitorear tu frecuencia cardíaca durante los entrenamientos.</string>
+    <string>Necesitamos acceso al monitor de frecuencia cardíaca para tus entrenamientos.</string>
     <key>NSHealthUpdateUsageDescription</key>
-    <string>Guardaremos tus sesiones de entrenamiento en Apple Health.</string>
+    <string>Guardaremos tus entrenamientos en Apple Health.</string>
     <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>Conexión con sensores de frecuencia cardíaca BLE.</string>
+    <string>Conexión con dispositivos BLE de ritmo cardíaco.</string>
+    <key>UILaunchScreen</key>
+    <dict/>
 </dict>
 </plist>
