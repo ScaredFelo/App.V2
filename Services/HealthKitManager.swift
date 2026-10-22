@@ -7,7 +7,7 @@ class HealthKitManager: ObservableObject {
     @Published var isAuthorized: Bool = false
     
     private let healthStore = HKHealthStore()
-    private var workoutSession: HKWorkoutSession?
+    private var anchor: HKQueryAnchor?
     
     func solicitarPermisoHealthKit(completion: @escaping (Bool) -> Void) {
         guard HKHealthStore.isHealthDataAvailable() else {
@@ -27,76 +27,68 @@ class HealthKitManager: ObservableObject {
             DispatchQueue.main.async {
                 self?.isAuthorized = success
                 if success {
-                    self?.iniciarWorkoutSessionIOS()
+                    self?.iniciarObservacionBPM()
                 }
                 completion(success)
             }
         }
     }
     
-    func iniciarWorkoutSessionIOS() {
-        let configuration = HKWorkoutConfiguration()
-        configuration.activityType = .traditionalStrengthTraining
-        configuration.locationType = .indoor
-        
-        do {
-            let session = try HKWorkoutSession(healthStore: healthStore, configuration: configuration)
-            self.workoutSession = session
-            session.startActivity(with: Date())
-            
-            self.iniciarObservacionBPM()
-        } catch {
-            print("Error al iniciar sesión de entreno en iOS: \(error.localizedDescription)")
-            iniciarObservacionBPM()
-        }
-    }
-    
-    func detenerWorkoutSession() {
-        workoutSession?.end()
-    }
-    
     func iniciarObservacionBPM() {
         guard let tipoRitmoCardiaco = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
         
-        let query = HKObserverQuery(sampleType: tipoRitmoCardiaco, predicate: nil) { [weak self] _, completionHandler, error in
-            if error != nil {
-                completionHandler()
-                return
-            }
-            
-            self?.obtenerUltimoBPM { bpm in
-                DispatchQueue.main.async {
-                    if bpm > 0 {
-                        self?.currentBPM = Int(bpm)
-                    }
-                }
-                completionHandler()
-            }
+        // Habilitar entrega inmediata en segundo plano
+        healthStore.enableBackgroundDelivery(for: tipoRitmoCardiaco, frequency: .immediate) { _, _ in }
+        
+        // Consulta anclada para recibir cambios continuos
+        let samplePredicate = HKQuery.predicateForSamples(withStart: Date().addingTimeInterval(-3600), end: nil, options: .strictStartDate)
+        
+        let query = HKAnchoredObjectQuery(
+            type: tipoRitmoCardiaco,
+            predicate: samplePredicate,
+            anchor: anchor,
+            limit: HKObjectQueryNoLimit
+        ) { [weak self] _, samples, _, newAnchor, _ in
+            self?.anchor = newAnchor
+            self?.procesarMuestrasBPM(samples)
+        }
+        
+        query.updateHandler = { [weak self] _, samples, _, newAnchor, _ in
+            self?.anchor = newAnchor
+            self?.procesarMuestrasBPM(samples)
         }
         
         healthStore.execute(query)
-        healthStore.enableBackgroundDelivery(for: tipoRitmoCardiaco, frequency: .immediate) { _, _ in }
+        obtenerUltimoBPM()
+    }
+    
+    private func procesarMuestrasBPM(_ samples: [HKSample]?) {
+        guard let quantitySamples = samples as? [HKQuantitySample], let ultimaMuestra = quantitySamples.last else { return }
         
-        obtenerUltimoBPM { [weak self] bpm in
-            DispatchQueue.main.async {
-                if bpm > 0 {
-                    self?.currentBPM = Int(bpm)
-                }
+        let unidadBPM = HKUnit.count().unitDivided(by: HKUnit.minute())
+        let valorBPM = Int(ultimaMuestra.quantity.doubleValue(for: unidadBPM))
+        
+        DispatchQueue.main.async {
+            if valorBPM > 0 {
+                self.currentBPM = valorBPM
             }
         }
     }
     
-    func obtenerUltimoBPM(completion: @escaping (Double) -> Void) {
+    func obtenerUltimoBPM() {
         guard let tipoRitmoCardiaco = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
         
-        let query = HKSampleQuery(sampleType: tipoRitmoCardiaco, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, results, _ in
-            guard let muestra = results?.first as? HKQuantitySample else {
-                completion(0)
-                return
-            }
+        let query = HKSampleQuery(sampleType: tipoRitmoCardiaco, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { [weak self] _, results, _ in
+            guard let muestra = results?.first as? HKQuantitySample else { return }
             let unidadBPM = HKUnit.count().unitDivided(by: HKUnit.minute())
-            completion(muestra.quantity.doubleValue(for: unidadBPM))
+            let valorBPM = Int(muestra.quantity.doubleValue(for: unidadBPM))
+            
+            DispatchQueue.main.async {
+                if valorBPM > 0 {
+                    self?.currentBPM = valorBPM
+                }
+            }
         }
         healthStore.execute(query)
     }
