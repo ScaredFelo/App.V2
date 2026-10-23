@@ -2,6 +2,7 @@ import SwiftUI
 
 public struct MinimizedTimerView: View {
     public let timeRemaining: Int
+    public let totalSeconds: Int
     public let isPaused: Bool
     public let onExpand: () -> Void
     public let onTogglePause: () -> Void
@@ -11,6 +12,7 @@ public struct MinimizedTimerView: View {
 
     public init(
         timeRemaining: Int,
+        totalSeconds: Int,
         isPaused: Bool,
         onExpand: @escaping () -> Void,
         onTogglePause: @escaping () -> Void,
@@ -19,6 +21,7 @@ public struct MinimizedTimerView: View {
         onSkip: @escaping () -> Void
     ) {
         self.timeRemaining = timeRemaining
+        self.totalSeconds = totalSeconds
         self.isPaused = isPaused
         self.onExpand = onExpand
         self.onTogglePause = onTogglePause
@@ -28,96 +31,116 @@ public struct MinimizedTimerView: View {
     }
 
     public var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Button(action: onExpand) {
                 Image(systemName: "chevron.up")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(width: 30, height: 36)
-                    .fixedSize()
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .frame(width: 24, height: 30)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .accessibilityLabel("Expandir temporizador")
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text(isPaused ? "Pausado" : "Descanso")
-                    .font(.caption2)
-                    .foregroundStyle(isPaused ? Color.orange : Color.secondary)
-                Text(timeFormatted(timeRemaining))
-                    .font(.system(.subheadline, design: .rounded).bold())
-                    .foregroundStyle(.white)
-                    .monospacedDigit()
-            }
-            .fixedSize()
+            Text(timeFormatted(timeRemaining))
+                .font(.system(.title3, design: .rounded, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .fixedSize()
 
             Spacer(minLength: 4)
 
-            timerButton(
-                icon: isPaused ? "play.fill" : "pause.fill",
-                tint: .white,
-                background: Color(.systemGray6).opacity(0.3),
-                action: onTogglePause,
-                accessibilityLabel: isPaused ? "Reanudar" : "Pausar"
-            )
+            HStack(spacing: 2) {
+                timerButton(
+                    icon: isPaused ? "play.fill" : "pause.fill",
+                    action: onTogglePause,
+                    accessibilityLabel: isPaused ? "Reanudar" : "Pausar"
+                )
 
-            timerButton(
-                icon: "gobackward.10",
-                tint: .white,
-                background: Color(.systemGray6).opacity(0.3),
-                action: onSub10,
-                accessibilityLabel: "Restar 10 segundos"
-            )
+                timerButton(
+                    icon: "gobackward.10",
+                    action: onSub10,
+                    accessibilityLabel: "Restar 10 segundos"
+                )
 
-            timerButton(
-                icon: "goforward.10",
-                tint: .white,
-                background: Color(.systemGray6).opacity(0.3),
-                action: onAdd10,
-                accessibilityLabel: "Añadir 10 segundos"
-            )
+                timerButton(
+                    icon: "goforward.10",
+                    action: onAdd10,
+                    accessibilityLabel: "Añadir 10 segundos"
+                )
 
-            timerButton(
-                icon: "forward.end.fill",
-                tint: .black,
-                background: .white,
-                action: onSkip,
-                accessibilityLabel: "Omitir descanso"
-            )
+                timerButton(
+                    icon: "forward.end.fill",
+                    tint: .white.opacity(0.95),
+                    action: onSkip,
+                    accessibilityLabel: "Omitir descanso"
+                )
+            }
         }
-        .frame(height: 36)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(height: 56)
-        .background(Color.black)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.black.opacity(0.8), in: Capsule())
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(alignment: .bottom) {
+            progressBar
+        }
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+            Capsule()
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
+        .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 6)
+    }
+
+    private var progressBar: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.white.opacity(0.12))
+
+                Capsule()
+                    .fill(progressTint)
+                    .frame(width: proxy.size.width * progress)
+            }
+        }
+        .frame(height: 2)
+        .padding(.horizontal, 22)
+        .padding(.bottom, 7)
+        .animation(.linear(duration: 0.25), value: progress)
+        .allowsHitTesting(false)
     }
 
     private func timerButton(
         icon: String,
-        tint: Color,
-        background: Color,
+        tint: Color = .white.opacity(0.85),
         action: @escaping () -> Void,
         accessibilityLabel: String
     ) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .renderingMode(.template)
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(tint)
-                .frame(width: 32, height: 32)
-                .background(background)
-                .clipShape(Circle())
-                .fixedSize()
+                .frame(width: 30, height: 30)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
     }
 
+    private var progress: Double {
+        guard totalSeconds > 0 else { return 0 }
+        let elapsed = Double(max(0, totalSeconds - timeRemaining))
+        return min(max(elapsed / Double(totalSeconds), 0), 1)
+    }
+
+    private var progressTint: Color {
+        isPaused ? Color.orange.opacity(0.85) : Color.white.opacity(0.8)
+    }
+
     private func timeFormatted(_ seconds: Int) -> String {
-        let minutes = max(0, seconds) / 60
-        let secs = max(0, seconds) % 60
-        return String(format: "%d:%02d", minutes, secs)
+        let clamped = max(0, seconds)
+        return String(format: "%02d:%02d", clamped / 60, clamped % 60)
     }
 }

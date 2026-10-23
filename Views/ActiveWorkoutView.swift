@@ -164,6 +164,7 @@ public struct ActiveWorkoutView: View {
             if viewModel.isResting && viewModel.isTimerMinimized {
                 MinimizedTimerView(
                     timeRemaining: viewModel.restTimeRemaining,
+                    totalSeconds: viewModel.totalRestSeconds,
                     isPaused: viewModel.isRestPaused,
                     onExpand: { expandTimer() },
                     onTogglePause: {
