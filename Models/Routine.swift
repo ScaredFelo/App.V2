@@ -6,6 +6,7 @@ public final class Routine {
     public var id: UUID
     public var name: String
     public var isTemplate: Bool
+    public var sortOrder: Int = 0
 
     @Relationship(deleteRule: .cascade)
     public var exercises: [RoutineExercise] = []
@@ -14,11 +15,13 @@ public final class Routine {
         id: UUID = UUID(),
         name: String,
         isTemplate: Bool = true,
+        sortOrder: Int = 0,
         exercises: [RoutineExercise] = []
     ) {
         self.id = id
         self.name = name
         self.isTemplate = isTemplate
+        self.sortOrder = sortOrder
         self.exercises = exercises
     }
 }

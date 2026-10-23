@@ -32,16 +32,6 @@ public struct MinimizedTimerView: View {
 
     public var body: some View {
         HStack(spacing: 12) {
-            Button(action: onExpand) {
-                Image(systemName: "chevron.up")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .frame(width: 24, height: 30)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Expandir temporizador")
-
             Text(timeFormatted(timeRemaining))
                 .font(.system(.title3, design: .rounded, weight: .bold))
                 .monospacedDigit()
@@ -49,6 +39,7 @@ public struct MinimizedTimerView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .fixedSize()
+                .allowsHitTesting(false)
 
             Spacer(minLength: 4)
 
@@ -81,6 +72,14 @@ public struct MinimizedTimerView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .background {
+            Button(action: onExpand) {
+                Color.clear
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Expandir temporizador")
+        }
         .background(Color.black.opacity(0.8), in: Capsule())
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(alignment: .bottom) {

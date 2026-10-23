@@ -47,7 +47,6 @@ public struct ActiveWorkoutView: View {
                                 routineExercise: routineExercise,
                                 exercise: exercise,
                                 sets: viewModel.activeSets[routineExercise.id] ?? [],
-                                timerAnimation: timerAnimation,
                                 isTimerOrigin: timerIsLaunching && timerOriginCardID == routineExercise.id,
                                 onToggleSet: { setIndex in
                                     toggleSet(for: routineExercise, setIndex: setIndex)
@@ -145,7 +144,6 @@ public struct ActiveWorkoutView: View {
                             onSkip: { skipRest() },
                             onMinimize: { minimizeTimer() }
                         )
-                        .matchedGeometryEffect(id: timerLaunchAnimationID, in: timerAnimation, isSource: false)
                         .matchedGeometryEffect(id: timerIsLaunching ? "timerContainer-inactive" : "timerContainer", in: timerAnimation, isSource: false)
                         .scaleEffect(viewModel.isRestFinishing ? 1.05 : 1)
                         .opacity(viewModel.isRestFinishing ? 0 : 1)
@@ -189,7 +187,7 @@ public struct ActiveWorkoutView: View {
                 .zIndex(1)
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.84), value: viewModel.isResting)
+        .animation(.easeInOut(duration: 0.25), value: viewModel.isResting)
         .animation(.spring(response: 0.42, dampingFraction: 0.82), value: viewModel.isTimerMinimized)
         .animation(.easeIn(duration: 0.22), value: viewModel.isRestFinishing)
         }
@@ -270,11 +268,6 @@ public struct ActiveWorkoutView: View {
         }
     }
 
-    private var timerLaunchAnimationID: String {
-        guard timerIsLaunching, let timerOriginCardID else { return "timerLaunch-none" }
-        return "timerLaunch-\(timerOriginCardID.uuidString)"
-    }
-
     private var timerDragGesture: some Gesture {
         DragGesture(minimumDistance: 10)
             .onChanged { value in
@@ -307,7 +300,7 @@ public struct ActiveWorkoutView: View {
             beginTimerLaunch(from: routineExercise.id)
         }
 
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+        withAnimation(.easeInOut(duration: 0.25)) {
             viewModel.toggleSetCompletion(for: routineExercise.id, setIndex: setIndex, modelContext: modelContext)
         }
     }
@@ -398,7 +391,6 @@ struct ExerciseCardView: View {
     let routineExercise: RoutineExercise
     let exercise: Exercise
     let sets: [ActiveWorkoutViewModel.SetInputState]
-    let timerAnimation: Namespace.ID
     let isTimerOrigin: Bool
     let onToggleSet: (Int) -> Void
     let onUpdateSet: (Int, Double, Int) -> Void
@@ -500,13 +492,6 @@ struct ExerciseCardView: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(isTimerOrigin ? Color.green.opacity(0.45) : Color.white.opacity(0.08), lineWidth: 1)
         )
-        .overlay(alignment: .center) {
-            Circle()
-                .fill(Color.black.opacity(0.001))
-                .frame(width: 48, height: 48)
-                .matchedGeometryEffect(id: "timerLaunch-\(routineExercise.id.uuidString)", in: timerAnimation, isSource: true)
-                .allowsHitTesting(false)
-        }
     }
 }
 
@@ -551,7 +536,7 @@ struct SetRowView: View {
                 .padding(6)
                 .background(Color(.systemGray6).opacity(0.3))
                 .cornerRadius(8)
-                .frame(width: 60)
+                .frame(width: 60, height: 32)
                 .onChange(of: weightString) { _, newValue in
                     if let w = Double(newValue) {
                         onUpdate(w, set.reps)
@@ -566,7 +551,7 @@ struct SetRowView: View {
                 .padding(6)
                 .background(Color(.systemGray6).opacity(0.3))
                 .cornerRadius(8)
-                .frame(width: 50)
+                .frame(width: 50, height: 32)
                 .onChange(of: repsString) { _, newValue in
                     if let r = Int(newValue) {
                         onUpdate(set.weight, r)
@@ -576,11 +561,11 @@ struct SetRowView: View {
             // Checkmark Button
             Button(action: onToggle) {
                 Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.body)
+                    .font(.subheadline)
                     .foregroundStyle(set.isCompleted ? .green : .gray)
-                    .frame(width: 30, height: 28)
+                    .frame(width: 32, height: 32)
             }
-            .frame(width: 32, alignment: .center)
+            .frame(width: 32, height: 32)
             .accessibilityLabel(set.isCompleted ? "Serie completada" : "Marcar serie como completada")
         }
         .padding(.horizontal, 6)

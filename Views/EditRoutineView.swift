@@ -6,6 +6,8 @@ struct EditRoutineView: View {
     @Environment(\.dismiss) private var dismiss
 
     @Bindable var routine: Routine
+    let isNewRoutine: Bool
+
     @Query(sort: \Exercise.name) private var exercises: [Exercise]
 
     @State private var showingExercisePicker = false
@@ -85,7 +87,10 @@ struct EditRoutineView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Cancelar") { dismiss() }
+                Button("Cancelar") {
+                    discardNewRoutineIfNeeded()
+                    dismiss()
+                }
             }
 
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -106,6 +111,9 @@ struct EditRoutineView: View {
                 .accessibilityLabel("Ajustar ejercicio")
 
                 Button("Guardar") {
+                    if isNewRoutine && routine.modelContext == nil {
+                        modelContext.insert(routine)
+                    }
                     try? modelContext.save()
                     dismiss()
                 }
@@ -116,9 +124,13 @@ struct EditRoutineView: View {
             ExercisePickerView { exercise in
                 let nextOrder = (routine.exercises.map(\.sortOrder).max() ?? -1) + 1
                 let routineExercise = RoutineExercise(exercise: exercise, sortOrder: nextOrder)
-                modelContext.insert(routineExercise)
+                if !isNewRoutine {
+                    modelContext.insert(routineExercise)
+                }
                 routine.exercises.append(routineExercise)
-                try? modelContext.save()
+                if !isNewRoutine {
+                    try? modelContext.save()
+                }
             }
         }
         .sheet(item: $exerciseToConfigure) { exercise in
@@ -134,9 +146,13 @@ struct EditRoutineView: View {
             Button("Eliminar", role: .destructive) {
                 if let routineExercise = exercisePendingRemoval {
                     routine.exercises.removeAll { $0.id == routineExercise.id }
-                    modelContext.delete(routineExercise)
+                    if !isNewRoutine {
+                        modelContext.delete(routineExercise)
+                    }
                     normalizeSortOrder()
-                    try? modelContext.save()
+                    if !isNewRoutine {
+                        try? modelContext.save()
+                    }
                 }
                 exercisePendingRemoval = nil
             }
@@ -150,6 +166,12 @@ struct EditRoutineView: View {
         for (index, routineExercise) in routine.exercises.sorted(by: { $0.sortOrder < $1.sortOrder }).enumerated() {
             routineExercise.sortOrder = index
         }
+    }
+
+    private func discardNewRoutineIfNeeded() {
+        guard isNewRoutine, routine.modelContext != nil else { return }
+        modelContext.delete(routine)
+        try? modelContext.save()
     }
 }
 

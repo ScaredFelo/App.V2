@@ -111,11 +111,15 @@ public struct CircularTimerView: View {
         .padding(24)
         .overlay(alignment: .topTrailing) {
             Button(action: onMinimize) {
-                Image(systemName: "chevron.down")
-                    .font(.headline)
-                    .foregroundStyle(.white)
+                Image(systemName: "xmark")
+                    .font(.headline.bold())
+                    .foregroundStyle(.red)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .padding()
+            .accessibilityLabel("Minimizar temporizador")
         }
         .background(Color.black)
         .clipShape(RoundedRectangle(cornerRadius: 24))

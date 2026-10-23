@@ -4,11 +4,13 @@ import SwiftData
 
 public struct RoutineListView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Routine.name) private var routines: [Routine]
+    @Query(sort: [SortDescriptor(\Routine.sortOrder), SortDescriptor(\Routine.name)])
+    private var routines: [Routine]
 
     @State private var activeSession: WorkoutSession? = nil
     @State private var selectedRoutineForWorkout: Routine? = nil
     @State private var routineToEdit: Routine? = nil
+    @State private var isCreatingNewRoutine = false
     @State private var isSelecting = false
     @State private var selectedRoutineIDs: Set<UUID> = []
     @State private var showingDeleteConfirmation = false
@@ -31,10 +33,15 @@ public struct RoutineListView: View {
                             onStart: { startWorkout(with: routine) },
                             onEdit: {
                                 guard !isSelecting else { return }
+                                isCreatingNewRoutine = false
                                 routineToEdit = routine
                             },
                             onToggleSelection: { toggleSelection(for: routine) },
-                            onLongPress: { enterSelectionMode(with: routine) }
+                            onLongPress: { enterSelectionMode(with: routine) },
+                            canMoveUp: canMoveUp(routine),
+                            canMoveDown: canMoveDown(routine),
+                            onMoveUp: { moveRoutine(routine, offset: -1) },
+                            onMoveDown: { moveRoutine(routine, offset: 1) }
                         )
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
@@ -82,9 +89,10 @@ public struct RoutineListView: View {
             }
             .sheet(item: $routineToEdit, onDismiss: {
                 routineToEdit = nil
+                isCreatingNewRoutine = false
             }) { routine in
                 NavigationStack {
-                    EditRoutineView(routine: routine)
+                    EditRoutineView(routine: routine, isNewRoutine: isCreatingNewRoutine)
                 }
             }
             .alert("Eliminar rutinas", isPresented: $showingDeleteConfirmation) {
@@ -112,10 +120,36 @@ public struct RoutineListView: View {
     private func createRoutine() {
         guard !isSelecting else { return }
 
-        let routine = Routine(name: "Nueva rutina", isTemplate: true, exercises: [])
-        modelContext.insert(routine)
-        try? modelContext.save()
+        let nextOrder = (routines.map(\.sortOrder).max() ?? -1) + 1
+        let routine = Routine(name: "Nueva rutina", isTemplate: true, sortOrder: nextOrder, exercises: [])
+        isCreatingNewRoutine = true
         routineToEdit = routine
+    }
+
+    private func canMoveUp(_ routine: Routine) -> Bool {
+        guard let index = routines.firstIndex(where: { $0.id == routine.id }) else { return false }
+        return index > 0
+    }
+
+    private func canMoveDown(_ routine: Routine) -> Bool {
+        guard let index = routines.firstIndex(where: { $0.id == routine.id }) else { return false }
+        return index < routines.count - 1
+    }
+
+    private func moveRoutine(_ routine: Routine, offset: Int) {
+        var ordered = routines
+        guard let index = ordered.firstIndex(where: { $0.id == routine.id }) else { return }
+
+        let targetIndex = index + offset
+        guard ordered.indices.contains(targetIndex) else { return }
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            ordered.swapAt(index, targetIndex)
+            for (position, item) in ordered.enumerated() {
+                item.sortOrder = position
+            }
+        }
+        try? modelContext.save()
     }
 
     private func enterSelectionMode(with routine: Routine) {
@@ -149,6 +183,11 @@ public struct RoutineListView: View {
             modelContext.delete(routine)
         }
 
+        let remaining = routines.filter { !idsToDelete.contains($0.id) }
+        for (index, routine) in remaining.enumerated() {
+            routine.sortOrder = index
+        }
+
         try? modelContext.save()
         exitSelectionMode()
     }
@@ -162,6 +201,10 @@ struct RoutineRowView: View {
     let onEdit: () -> Void
     let onToggleSelection: () -> Void
     let onLongPress: () -> Void
+    let canMoveUp: Bool
+    let canMoveDown: Bool
+    let onMoveUp: () -> Void
+    let onMoveDown: () -> Void
 
     @State private var suppressNextTap = false
 
@@ -234,7 +277,28 @@ struct RoutineRowView: View {
                     : "Iniciar entrenamiento con \(routine.name)"
             )
 
-            if !isSelecting {
+            if isSelecting {
+                if canMoveUp || canMoveDown {
+                    VStack(spacing: 6) {
+                        if canMoveUp {
+                            moveButton(
+                                icon: "chevron.up",
+                                action: onMoveUp,
+                                accessibilityLabel: "Subir \(routine.name)"
+                            )
+                        }
+
+                        if canMoveDown {
+                            moveButton(
+                                icon: "chevron.down",
+                                action: onMoveDown,
+                                accessibilityLabel: "Bajar \(routine.name)"
+                            )
+                        }
+                    }
+                    .padding(.trailing, 12)
+                }
+            } else {
                 Button(action: onEdit) {
                     Image(systemName: "pencil")
                         .font(.subheadline.bold())
@@ -254,5 +318,22 @@ struct RoutineRowView: View {
                 .stroke(isSelected ? Color.green.opacity(0.7) : Color.clear, lineWidth: 1)
         )
         .cornerRadius(16)
+    }
+
+    private func moveButton(
+        icon: String,
+        action: @escaping () -> Void,
+        accessibilityLabel: String
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.caption.bold())
+                .foregroundStyle(.white.opacity(0.8))
+                .frame(width: 28, height: 28)
+                .background(Color(.systemGray6).opacity(0.3))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(accessibilityLabel)
     }
 }
