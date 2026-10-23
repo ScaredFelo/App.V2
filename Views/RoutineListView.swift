@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import SwiftData
+import UIKit
 
 public struct RoutineListView: View {
     @Environment(\.modelContext) private var modelContext
@@ -11,13 +12,8 @@ public struct RoutineListView: View {
     @State private var selectedRoutineForWorkout: Routine? = nil
     @State private var routineToEdit: Routine? = nil
     @State private var isCreatingNewRoutine = false
-    @State private var isSelecting = false
-    @State private var selectedRoutineIDs: Set<UUID> = []
-    @State private var showingDeleteConfirmation = false
-
-    private var selectionTitle: String {
-        selectedRoutineIDs.count == 1 ? "1 seleccionada" : "\(selectedRoutineIDs.count) seleccionadas"
-    }
+    @State private var isEditing = false
+    @State private var routinePendingDeletion: Routine? = nil
 
     public var body: some View {
         NavigationStack {
@@ -28,20 +24,19 @@ public struct RoutineListView: View {
                     ForEach(routines) { routine in
                         RoutineRowView(
                             routine: routine,
-                            isSelecting: isSelecting,
-                            isSelected: selectedRoutineIDs.contains(routine.id),
+                            isEditing: isEditing,
                             onStart: { startWorkout(with: routine) },
                             onEdit: {
-                                guard !isSelecting else { return }
+                                guard !isEditing else { return }
                                 isCreatingNewRoutine = false
                                 routineToEdit = routine
                             },
-                            onToggleSelection: { toggleSelection(for: routine) },
-                            onLongPress: { enterSelectionMode(with: routine) },
+                            onLongPress: { enterEditMode() },
                             canMoveUp: canMoveUp(routine),
                             canMoveDown: canMoveDown(routine),
                             onMoveUp: { moveRoutine(routine, offset: -1) },
-                            onMoveDown: { moveRoutine(routine, offset: 1) }
+                            onMoveDown: { moveRoutine(routine, offset: 1) },
+                            onRequestDelete: { routinePendingDeletion = routine }
                         )
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
@@ -50,25 +45,24 @@ public struct RoutineListView: View {
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle(isSelecting ? selectionTitle : "Rutinas")
+            .navigationTitle(isEditing ? "Editar rutinas" : "Rutinas")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    if isSelecting {
+                    if isEditing {
                         Button("Cancelar") {
-                            exitSelectionMode()
+                            exitEditMode()
                         }
                     }
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    if isSelecting {
-                        Button(role: .destructive) {
-                            showingDeleteConfirmation = true
-                        } label: {
-                            Label("Eliminar seleccionadas", systemImage: "trash")
+                    if isEditing {
+                        Button(action: confirmEditMode) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.headline)
+                                .foregroundStyle(.green)
                         }
-                        .tint(.red)
-                        .disabled(selectedRoutineIDs.isEmpty)
+                        .accessibilityLabel("Confirmar cambios")
                     } else {
                         Button(action: createRoutine) {
                             Image(systemName: "plus")
@@ -95,19 +89,29 @@ public struct RoutineListView: View {
                     EditRoutineView(routine: routine, isNewRoutine: isCreatingNewRoutine)
                 }
             }
-            .alert("Eliminar rutinas", isPresented: $showingDeleteConfirmation) {
+            .alert(
+                "Eliminar rutina",
+                isPresented: Binding(
+                    get: { routinePendingDeletion != nil },
+                    set: { if !$0 { routinePendingDeletion = nil } }
+                )
+            ) {
                 Button("Eliminar", role: .destructive) {
-                    deleteSelectedRoutines()
+                    if let routine = routinePendingDeletion {
+                        deleteRoutine(routine)
+                    }
                 }
-                Button("Cancelar", role: .cancel) {}
+                Button("Cancelar", role: .cancel) {
+                    routinePendingDeletion = nil
+                }
             } message: {
-                Text("Se eliminarán las rutinas seleccionadas y sus ejercicios configurados. Esta acción no se puede deshacer.")
+                Text("Se eliminará \"\(routinePendingDeletion?.name ?? "")\". Esta acción no se puede deshacer.")
             }
         }
     }
 
     private func startWorkout(with routine: Routine) {
-        guard !isSelecting else { return }
+        guard !isEditing else { return }
 
         routineToEdit = nil
         let session = WorkoutSession(startDate: Date(), totalVolumeKg: 0.0)
@@ -118,7 +122,7 @@ public struct RoutineListView: View {
     }
 
     private func createRoutine() {
-        guard !isSelecting else { return }
+        guard !isEditing else { return }
 
         let nextOrder = (routines.map(\.sortOrder).max() ?? -1) + 1
         let routine = Routine(name: "Nueva rutina", isTemplate: true, sortOrder: nextOrder, exercises: [])
@@ -152,73 +156,59 @@ public struct RoutineListView: View {
         try? modelContext.save()
     }
 
-    private func enterSelectionMode(with routine: Routine) {
-        if !isSelecting {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isSelecting = true
-            }
-        }
-        selectedRoutineIDs.insert(routine.id)
-    }
+    private func enterEditMode() {
+        guard !isEditing else { return }
 
-    private func toggleSelection(for routine: Routine) {
-        if selectedRoutineIDs.contains(routine.id) {
-            selectedRoutineIDs.remove(routine.id)
-        } else {
-            selectedRoutineIDs.insert(routine.id)
-        }
-    }
-
-    private func exitSelectionMode() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         withAnimation(.easeInOut(duration: 0.2)) {
-            isSelecting = false
+            isEditing = true
         }
-        selectedRoutineIDs.removeAll()
     }
 
-    private func deleteSelectedRoutines() {
-        let idsToDelete = selectedRoutineIDs
-
-        for routine in routines where idsToDelete.contains(routine.id) {
-            modelContext.delete(routine)
+    private func exitEditMode() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isEditing = false
         }
+        routinePendingDeletion = nil
+    }
 
-        let remaining = routines.filter { !idsToDelete.contains($0.id) }
-        for (index, routine) in remaining.enumerated() {
-            routine.sortOrder = index
+    private func confirmEditMode() {
+        try? modelContext.save()
+        exitEditMode()
+    }
+
+    private func deleteRoutine(_ routine: Routine) {
+        modelContext.delete(routine)
+
+        let remaining = routines.filter { $0.id != routine.id }
+        for (index, item) in remaining.enumerated() {
+            item.sortOrder = index
         }
 
         try? modelContext.save()
-        exitSelectionMode()
+        routinePendingDeletion = nil
     }
 }
 
 struct RoutineRowView: View {
     let routine: Routine
-    let isSelecting: Bool
-    let isSelected: Bool
+    let isEditing: Bool
     let onStart: () -> Void
     let onEdit: () -> Void
-    let onToggleSelection: () -> Void
     let onLongPress: () -> Void
     let canMoveUp: Bool
     let canMoveDown: Bool
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
+    let onRequestDelete: () -> Void
 
     @State private var suppressNextTap = false
+    @State private var dragOffset: CGFloat = 0
+    @State private var isDragging = false
 
     var body: some View {
         HStack(spacing: 8) {
             HStack(spacing: 12) {
-                if isSelecting {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.title3)
-                        .foregroundStyle(isSelected ? Color.green : Color.secondary)
-                        .transition(.scale.combined(with: .opacity))
-                        .accessibilityHidden(true)
-                }
-
                 VStack(alignment: .leading, spacing: 4) {
                     Text(routine.name)
                         .font(.title3.bold())
@@ -230,7 +220,7 @@ struct RoutineRowView: View {
 
                 Spacer(minLength: 8)
 
-                if !isSelecting {
+                if !isEditing {
                     HStack(spacing: 4) {
                         Image(systemName: "play.fill")
                         Text("Iniciar")
@@ -246,13 +236,8 @@ struct RoutineRowView: View {
             .padding(16)
             .contentShape(Rectangle())
             .onTapGesture {
-                guard !suppressNextTap else { return }
-
-                if isSelecting {
-                    onToggleSelection()
-                } else {
-                    onStart()
-                }
+                guard !isEditing, !suppressNextTap else { return }
+                onStart()
             }
             .onLongPressGesture(
                 minimumDuration: 0.5,
@@ -272,12 +257,12 @@ struct RoutineRowView: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel(
-                isSelecting
-                    ? (isSelected ? "Deseleccionar \(routine.name)" : "Seleccionar \(routine.name)")
+                isEditing
+                    ? "Editar \(routine.name)"
                     : "Iniciar entrenamiento con \(routine.name)"
             )
 
-            if isSelecting {
+            if isEditing {
                 if canMoveUp || canMoveDown {
                     VStack(spacing: 6) {
                         if canMoveUp {
@@ -312,12 +297,51 @@ struct RoutineRowView: View {
                 .accessibilityLabel("Editar rutina \(routine.name)")
             }
         }
-        .background(isSelected ? Color.green.opacity(0.14) : Color(.systemGray6).opacity(0.15))
+        .background(Color(.systemGray6).opacity(0.15))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(isSelected ? Color.green.opacity(0.7) : Color.clear, lineWidth: 1)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
         .cornerRadius(16)
+        .offset(x: dragOffset)
+        .simultaneousGesture(swipeGesture, including: isEditing ? .all : .none)
+        .onChange(of: isEditing) { _, editing in
+            if !editing {
+                dragOffset = 0
+                isDragging = false
+            }
+        }
+    }
+
+    private var swipeGesture: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                guard isEditing else { return }
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+
+                if !isDragging {
+                    isDragging = true
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                }
+
+                dragOffset = value.translation.width * 0.65
+            }
+            .onEnded { value in
+                guard isEditing else { return }
+
+                let horizontal = value.translation.width
+                let isHorizontal = abs(horizontal) > abs(value.translation.height)
+                let passedLimit = abs(horizontal) > 90 || abs(value.predictedEndTranslation.width) > 150
+
+                if isHorizontal && passedLimit {
+                    onRequestDelete()
+                }
+
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+                    dragOffset = 0
+                }
+                isDragging = false
+            }
     }
 
     private func moveButton(
