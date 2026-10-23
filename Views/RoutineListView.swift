@@ -204,112 +204,153 @@ struct RoutineRowView: View {
 
     @State private var suppressNextTap = false
     @State private var dragOffset: CGFloat = 0
-    @State private var isDragging = false
+    @State private var thresholdHapticTriggered = false
+
+    private let deleteThreshold: CGFloat = 120
+    private let cardBackground = Color(red: 0.07, green: 0.07, blue: 0.08)
 
     var body: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(routine.name)
-                        .font(.title3.bold())
-                        .foregroundStyle(.white)
-                    Text("\(routine.exercises.count) ejercicios configurados")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 8)
-
-                if !isEditing {
-                    HStack(spacing: 4) {
-                        Image(systemName: "play.fill")
-                        Text("Iniciar")
-                    }
-                    .font(.subheadline.bold())
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.white)
-                    .cornerRadius(20)
-                }
-            }
-            .padding(16)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                guard !isEditing, !suppressNextTap else { return }
-                onStart()
-            }
-            .onLongPressGesture(
-                minimumDuration: 0.5,
-                maximumDistance: 20,
-                perform: {
-                    suppressNextTap = true
-                    onLongPress()
-                },
-                onPressingChanged: { isPressing in
-                    guard !isPressing, suppressNextTap else { return }
-
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                        suppressNextTap = false
-                    }
-                }
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(
-                isEditing
-                    ? "Editar \(routine.name)"
-                    : "Iniciar entrenamiento con \(routine.name)"
-            )
-
+        ZStack {
             if isEditing {
-                if canMoveUp || canMoveDown {
-                    VStack(spacing: 6) {
-                        if canMoveUp {
-                            moveButton(
-                                icon: "chevron.up",
-                                action: onMoveUp,
-                                accessibilityLabel: "Subir \(routine.name)"
-                            )
-                        }
+                deleteBackground
+            }
 
-                        if canMoveDown {
-                            moveButton(
-                                icon: "chevron.down",
-                                action: onMoveDown,
-                                accessibilityLabel: "Bajar \(routine.name)"
-                            )
-                        }
-                    }
-                    .padding(.trailing, 12)
-                }
-            } else {
-                Button(action: onEdit) {
-                    Image(systemName: "pencil")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.white)
-                        .frame(width: 34, height: 34)
-                        .background(Color(.systemGray6).opacity(0.3))
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.borderless)
-                .padding(.trailing, 16)
-                .accessibilityLabel("Editar rutina \(routine.name)")
+            cardSurface
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .id(routine.id)
+        .onChange(of: isEditing) { _, editing in
+            if !editing {
+                dragOffset = 0
+                thresholdHapticTriggered = false
             }
         }
-        .background(Color(.systemGray6).opacity(0.15))
+    }
+
+    private var cardSurface: some View {
+        HStack(spacing: 8) {
+            routineContent
+            trailingControls
+        }
+        .background(cardBackground)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
         .cornerRadius(16)
         .offset(x: dragOffset)
-        .simultaneousGesture(swipeGesture, including: isEditing ? .all : .none)
-        .onChange(of: isEditing) { _, editing in
-            if !editing {
-                dragOffset = 0
-                isDragging = false
+    }
+
+    private var routineContent: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(routine.name)
+                    .font(.title3.bold())
+                    .foregroundStyle(.white)
+                Text("\(routine.exercises.count) ejercicios configurados")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
+
+            Spacer(minLength: 8)
+
+            if !isEditing {
+                HStack(spacing: 4) {
+                    Image(systemName: "play.fill")
+                    Text("Iniciar")
+                }
+                .font(.subheadline.bold())
+                .foregroundColor(.black)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.white)
+                .cornerRadius(20)
+            }
+        }
+        .padding(16)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard !isEditing, !suppressNextTap else { return }
+            onStart()
+        }
+        .onLongPressGesture(
+            minimumDuration: 0.5,
+            maximumDistance: 20,
+            perform: {
+                suppressNextTap = true
+                onLongPress()
+            },
+            onPressingChanged: { isPressing in
+                guard !isPressing, suppressNextTap else { return }
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    suppressNextTap = false
+                }
+            }
+        )
+        .simultaneousGesture(swipeGesture, including: isEditing ? .all : .none)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(
+            isEditing
+                ? "Editar \(routine.name)"
+                : "Iniciar entrenamiento con \(routine.name)"
+        )
+    }
+
+    @ViewBuilder
+    private var trailingControls: some View {
+        if isEditing {
+            if canMoveUp || canMoveDown {
+                VStack(spacing: 6) {
+                    if canMoveUp {
+                        moveButton(
+                            icon: "chevron.up",
+                            action: onMoveUp,
+                            accessibilityLabel: "Subir \(routine.name)"
+                        )
+                    }
+
+                    if canMoveDown {
+                        moveButton(
+                            icon: "chevron.down",
+                            action: onMoveDown,
+                            accessibilityLabel: "Bajar \(routine.name)"
+                        )
+                    }
+                }
+                .padding(.trailing, 12)
+            }
+        } else {
+            Button(action: onEdit) {
+                Image(systemName: "pencil")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(Color(.systemGray6).opacity(0.3))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.borderless)
+            .padding(.trailing, 16)
+            .accessibilityLabel("Editar rutina \(routine.name)")
+        }
+    }
+
+    private var deleteBackground: some View {
+        ZStack {
+            Color.red
+
+            HStack(spacing: 8) {
+                Image(systemName: "trash.fill")
+                Text("Eliminar")
+            }
+            .font(.subheadline.bold())
+            .foregroundStyle(.white)
+            .padding(.horizontal, 20)
+            .frame(
+                maxWidth: .infinity,
+                alignment: dragOffset >= 0 ? .leading : .trailing
+            )
         }
     }
 
@@ -319,28 +360,28 @@ struct RoutineRowView: View {
                 guard isEditing else { return }
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
 
-                if !isDragging {
-                    isDragging = true
+                dragOffset = value.translation.width
+
+                if abs(value.translation.width) >= deleteThreshold, !thresholdHapticTriggered {
+                    thresholdHapticTriggered = true
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 }
-
-                dragOffset = value.translation.width * 0.65
             }
             .onEnded { value in
                 guard isEditing else { return }
 
                 let horizontal = value.translation.width
                 let isHorizontal = abs(horizontal) > abs(value.translation.height)
-                let passedLimit = abs(horizontal) > 90 || abs(value.predictedEndTranslation.width) > 150
-
-                if isHorizontal && passedLimit {
-                    onRequestDelete()
-                }
+                let passedThreshold = isHorizontal && abs(horizontal) >= deleteThreshold
 
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
                     dragOffset = 0
                 }
-                isDragging = false
+                thresholdHapticTriggered = false
+
+                if passedThreshold {
+                    onRequestDelete()
+                }
             }
     }
 
