@@ -64,6 +64,7 @@ public final class ActiveWorkoutViewModel {
         setupInitialSets(modelContext: modelContext)
         captureOriginalStructure()
         setupBPMObserver()
+        HealthKitManager.shared.requestAuthorization()
     }
 
     // MARK: - Exercise Structure

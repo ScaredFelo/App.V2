@@ -10,7 +10,7 @@ targets:
     deploymentTarget: "17.0"
     bundleId: com.jordiferres.appgym
     entitlements:
-      path: AppGym.entitlements
+      path: AppGym/AppGym.entitlements
     sources:
       - path: App.swift
       - path: Models
@@ -33,8 +33,8 @@ targets:
           - audio
         NSBluetoothAlwaysUsageDescription: "AppGym requiere acceso a Bluetooth para conectar con el sensor de pulso cardíaco."
         NSBluetoothPeripheralUsageDescription: "AppGym requiere acceso a Bluetooth para conectar con el sensor de pulso cardíaco."
-        NSHealthShareUsageDescription: "AppGym lee las pulsaciones de tus AirPods Pro en tiempo real."
-        NSHealthUpdateUsageDescription: "AppGym registra tus entrenamientos en la app Salud."
+        NSHealthShareUsageDescription: "Necesitamos acceder a tus pulsaciones para mostrar tu frecuencia cardíaca en el temporizador."
+        NSHealthUpdateUsageDescription: "Necesitamos registrar tus sesiones de entrenamiento en Apple Health."
     settings:
       base:
         PRODUCT_NAME: AppGym
@@ -42,6 +42,7 @@ targets:
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_FILE: Info.plist
+        CODE_SIGN_ENTITLEMENTS: AppGym/AppGym.entitlements
         SWIFT_VERSION: "5.0"
         SWIFT_STRICT_CONCURRENCY: "minimal"
         CODE_SIGNING_REQUIRED: "NO"

@@ -11,7 +11,7 @@ public struct CircularTimerView: View {
     public let onSkip: () -> Void
     public let onMinimize: () -> Void
 
-    @ObservedObject private var bpmManager = BPMManager.shared
+    @ObservedObject private var healthKitManager = HealthKitManager.shared
 
     private let dialSize: CGFloat = 260
     private let outerLineWidth: CGFloat = 14
@@ -26,7 +26,7 @@ public struct CircularTimerView: View {
     }
 
     private var effectiveBPM: Int {
-        bpmManager.currentBPM > 0 ? min(max(bpmManager.currentBPM, 50), 210) : 50
+        healthKitManager.currentBPM > 0 ? min(max(healthKitManager.currentBPM, 50), 210) : 50
     }
 
     private var needleAngle: Double {
@@ -34,8 +34,8 @@ public struct CircularTimerView: View {
     }
 
     private var zoneColor: Color {
-        guard bpmManager.currentBPM > 0 else { return .green }
-        switch bpmManager.currentBPM {
+        guard healthKitManager.currentBPM > 0 else { return .green }
+        switch healthKitManager.currentBPM {
         case ..<90:
             return .green
         case ..<150:
@@ -195,7 +195,7 @@ public struct CircularTimerView: View {
         .frame(width: dialSize, height: dialSize)
         .rotationEffect(.degrees(needleAngle))
         .opacity(0.85)
-        .animation(.easeOut(duration: 0.45), value: needleAngle)
+        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: healthKitManager.currentBPM)
     }
 
     private var readout: some View {
@@ -212,7 +212,7 @@ public struct CircularTimerView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
-            Text(bpmManager.currentBPM > 0 ? "\(bpmManager.currentBPM) BPM" : "-- BPM")
+            Text(healthKitManager.currentBPM > 0 ? "\(healthKitManager.currentBPM) BPM" : "-- BPM")
                 .font(.caption.bold())
                 .monospacedDigit()
                 .foregroundStyle(zoneColor)

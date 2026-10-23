@@ -12,7 +12,7 @@ final class BPMManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     private var centralManager: CBCentralManager?
     private var heartRatePeripheral: CBPeripheral?
 
-    let healthKitManager = HealthKitManager()
+    let healthKitManager = HealthKitManager.shared
     private var cancellables = Set<AnyCancellable>()
 
     override init() {

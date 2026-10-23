@@ -17,9 +17,9 @@
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>NSHealthShareUsageDescription</key>
-    <string>Necesitamos acceso a HealthKit para monitorear tu frecuencia cardíaca durante los entrenamientos.</string>
+    <string>Necesitamos acceder a tus pulsaciones para mostrar tu frecuencia cardíaca en el temporizador.</string>
     <key>NSHealthUpdateUsageDescription</key>
-    <string>Guardaremos tus sesiones de entrenamiento en Apple Health.</string>
+    <string>Necesitamos registrar tus sesiones de entrenamiento en Apple Health.</string>
     <key>NSBluetoothAlwaysUsageDescription</key>
     <string>La app necesita Bluetooth para conectar el sensor de frecuencia cardíaca durante el entrenamiento.</string>
     <key>NSBluetoothPeripheralUsageDescription</key>
