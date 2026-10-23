@@ -17,8 +17,8 @@ public struct CircularTimerView: View {
     private let outerLineWidth: CGFloat = 14
     private let arcStartAngle: Double = 135
     private let arcSpan: Double = 270
-    private let bpmRange: ClosedRange<Double> = 50...220
-    private let bpmMarks = [50, 70, 90, 110, 130, 150, 220]
+    private let bpmRange: ClosedRange<Double> = 50...210
+    private let bpmValues = [50, 70, 90, 110, 130, 150, 170, 190, 210]
 
     private var progress: Double {
         guard totalSeconds > 0 else { return 0 }
@@ -26,11 +26,11 @@ public struct CircularTimerView: View {
     }
 
     private var effectiveBPM: Int {
-        bpmManager.currentBPM > 0 ? min(max(bpmManager.currentBPM, 50), 220) : 50
+        bpmManager.currentBPM > 0 ? min(max(bpmManager.currentBPM, 50), 210) : 50
     }
 
     private var needleAngle: Double {
-        tachometerAngle(for: effectiveBPM) - 270
+        angleForBPM(effectiveBPM) - 270
     }
 
     private var zoneColor: Color {
@@ -165,7 +165,7 @@ public struct CircularTimerView: View {
                 .rotationEffect(.degrees(arcStartAngle))
                 .animation(.easeInOut(duration: 0.4), value: zoneColor)
 
-            ForEach(bpmMarks, id: \.self) { bpm in
+            ForEach(bpmValues, id: \.self) { bpm in
                 tickMark(for: bpm)
             }
 
@@ -230,10 +230,10 @@ public struct CircularTimerView: View {
     }
 
     private func tickMark(for bpm: Int) -> some View {
-        let angle = tachometerAngle(for: bpm)
+        let angle = angleForBPM(bpm)
         let radians = angle * .pi / 180
         let center = dialSize / 2
-        let isBoundary = bpm == 50 || bpm == 220
+        let isBoundary = bpm == 50 || bpm == 210
 
         return ZStack {
             Capsule()
@@ -247,6 +247,8 @@ public struct CircularTimerView: View {
 
             Text("\(bpm)")
                 .font(.system(size: 8, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .multilineTextAlignment(.center)
                 .foregroundStyle(zoneColor.opacity(0.65))
                 .position(
                     x: center + CGFloat(cos(radians)) * 78,
@@ -255,7 +257,7 @@ public struct CircularTimerView: View {
         }
     }
 
-    private func tachometerAngle(for bpm: Int) -> Double {
+    private func angleForBPM(_ bpm: Int) -> Double {
         let clamped = min(max(Double(bpm), bpmRange.lowerBound), bpmRange.upperBound)
         let fraction = (clamped - bpmRange.lowerBound) / (bpmRange.upperBound - bpmRange.lowerBound)
         return arcStartAngle + fraction * arcSpan
