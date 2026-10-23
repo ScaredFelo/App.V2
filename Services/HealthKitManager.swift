@@ -34,23 +34,31 @@ final class HealthKitManager: ObservableObject {
             return
         }
 
-        healthStore.requestAuthorization(toShare: [], read: [heartRateType]) { [weak self] success, error in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.isAuthorized = success
+        let workoutType = HKObjectType.workoutType()
 
-                if let error {
-                    self.dataSourceName = "Error de permisos"
-                    print("HealthKit error de autorización: \(error.localizedDescription)")
-                    return
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+
+            self.healthStore.requestAuthorization(toShare: [workoutType], read: [heartRateType]) { [weak self] success, error in
+                print("[HealthKit] Autorización completada")
+
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.isAuthorized = success
+
+                    if let error {
+                        self.dataSourceName = "Error de permisos"
+                        print("HealthKit error de autorización: \(error.localizedDescription)")
+                        return
+                    }
+
+                    guard success else {
+                        self.dataSourceName = "Permiso denegado"
+                        return
+                    }
+
+                    self.startObservingHeartRate()
                 }
-
-                guard success else {
-                    self.dataSourceName = "Permiso denegado"
-                    return
-                }
-
-                self.startObservingHeartRate()
             }
         }
     }

@@ -6,6 +6,8 @@ public struct ActiveWorkoutView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
+    @ObservedObject private var healthKitManager = HealthKitManager.shared
+
     @State private var viewModel: ActiveWorkoutViewModel
     @State private var showingCancelConfirmation = false
     @State private var showingRoutineChangeOptions = false
@@ -38,6 +40,10 @@ public struct ActiveWorkoutView: View {
                     // Header Status & BPM
                     workoutHeader
                         .padding(.top, 10)
+
+                    if healthKitManager.currentBPM == 0 {
+                        appleHealthConnectionButton
+                    }
 
                     let _ = viewModel.structureVersion
 
@@ -341,6 +347,27 @@ public struct ActiveWorkoutView: View {
         withAnimation(.easeIn(duration: 0.22)) {
             viewModel.skipRest()
         }
+    }
+
+    private var appleHealthConnectionButton: some View {
+        Button {
+            HealthKitManager.shared.requestAuthorization()
+        } label: {
+            Label("Conectar Apple Salud / AirPods", systemImage: "heart.fill")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.9))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Color.black.opacity(0.55), in: Capsule())
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+                .fixedSize()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Conectar Apple Salud o AirPods")
     }
 
     private var workoutHeader: some View {
