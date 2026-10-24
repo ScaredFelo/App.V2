@@ -199,6 +199,7 @@ public struct ActiveWorkoutView: View {
         }
         .onAppear {
             BPMManager.shared.startScanning()
+            viewModel.startWorkoutActivityIfNeeded()
         }
         .onDisappear {
             pendingNewRoutinePromptID = nil

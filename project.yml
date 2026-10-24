@@ -23,6 +23,7 @@ targets:
           enabled: 1
     sources:
       - path: App.swift
+      - path: Attributes
       - path: Models
       - path: Services
       - path: ViewModels
@@ -68,7 +69,7 @@ targets:
     bundleId: com.jordiferres.appgym.widgets
     sources:
       - path: Widgets
-      - path: Models/WorkoutActivityAttributes.swift
+      - path: Attributes/WorkoutActivityAttributes.swift
     frameworks:
       - sdk: WidgetKit.framework
       - sdk: ActivityKit.framework
