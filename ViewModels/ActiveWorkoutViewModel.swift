@@ -480,6 +480,7 @@ public final class ActiveWorkoutViewModel {
     @discardableResult
     public func finishWorkout(modelContext: ModelContext) -> WorkoutSession {
         stopRest()
+        HealthKitManager.shared.stopHeartRateQuery()
         session.endDate = Date()
         try? modelContext.save()
         return session
@@ -526,6 +527,7 @@ public final class ActiveWorkoutViewModel {
 
     public func cancelWorkout(modelContext: ModelContext) {
         stopRest()
+        HealthKitManager.shared.stopHeartRateQuery()
         restoreOriginalStructure(modelContext: modelContext)
         modelContext.delete(session)
         try? modelContext.save()
