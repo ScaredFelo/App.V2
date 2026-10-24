@@ -120,31 +120,36 @@ final class HealthKitManager: ObservableObject {
     ) {
         liveActivitySnapshot = snapshot
         lastLiveActivityState = nil
-        isWorkoutLiveActivityActive = true
-
-        let existingActivities = Activity<WorkoutActivityAttributes>.activities
-        if !existingActivities.isEmpty {
-            Task {
-                for activity in existingActivities {
-                    await activity.end(nil, dismissalPolicy: .immediate)
-                }
-            }
-        }
-
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-
-        let attributes = WorkoutActivityAttributes(workoutName: workoutName)
-        let state = makeLiveActivityState(bpm: bpm)
+        isWorkoutLiveActivityActive = false
 
         do {
-            _ = try Activity<WorkoutActivityAttributes>.request(
+            guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+                debugMessage = "Live Activities desactivadas en Ajustes de iOS"
+                print("[LiveActivity] Desactivadas en Ajustes de iOS")
+                return
+            }
+
+            let existingActivities = Activity<WorkoutActivityAttributes>.activities
+            for activity in existingActivities {
+                Task { await activity.end(nil, dismissalPolicy: .immediate) }
+            }
+
+            let attributes = WorkoutActivityAttributes(workoutName: workoutName)
+            let state = makeLiveActivityState(bpm: bpm)
+            let activity = try Activity<WorkoutActivityAttributes>.request(
                 attributes: attributes,
                 content: ActivityContent(state: state, staleDate: nil),
                 pushType: nil
             )
+
             lastLiveActivityState = state
+            isWorkoutLiveActivityActive = true
+            debugMessage = "Live Activity iniciada correctamente"
+            print("[LiveActivity] Iniciada con éxito con ID: \(activity.id)")
         } catch {
-            print("Error iniciando Live Activity: \(error.localizedDescription)")
+            isWorkoutLiveActivityActive = false
+            debugMessage = "Error al iniciar Live Activity: \(error.localizedDescription)"
+            print("[LiveActivity] ERROR al iniciar: \(error.localizedDescription)")
         }
     }
 

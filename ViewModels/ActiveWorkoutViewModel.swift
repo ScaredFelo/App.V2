@@ -299,6 +299,7 @@ public final class ActiveWorkoutViewModel {
             restTimeRemaining = seconds
             currentRestModeTitle = "Descanso (\(seconds)s)"
             timerEndDate = Date().addingTimeInterval(Double(seconds))
+            NotificationManager.shared.scheduleRestFinishedNotification(after: TimeInterval(seconds))
             AudioAlertService.shared.startBackgroundAudio()
             startTimerCountdown()
 
@@ -359,6 +360,7 @@ public final class ActiveWorkoutViewModel {
             timerEndDate = newEndDate
             totalRestSeconds += 10
             restTimeRemaining = max(0, Int(ceil(newEndDate.timeIntervalSinceNow)))
+            NotificationManager.shared.scheduleRestFinishedNotification(after: TimeInterval(restTimeRemaining))
         }
     }
 
@@ -383,6 +385,7 @@ public final class ActiveWorkoutViewModel {
                 timerEndDate = newEndDate
                 totalRestSeconds = max(10, totalRestSeconds - 10)
                 restTimeRemaining = remaining
+                NotificationManager.shared.scheduleRestFinishedNotification(after: TimeInterval(remaining))
             }
         }
     }
@@ -395,6 +398,7 @@ public final class ActiveWorkoutViewModel {
         timerTask = nil
         bpmObserverTask?.cancel()
         bpmObserverTask = nil
+        NotificationManager.shared.cancelRestFinishedNotification()
 
         if let condition = currentRestCondition, case .timer = condition, let endDate = timerEndDate {
             restTimeRemaining = max(0, Int(ceil(endDate.timeIntervalSinceNow)))
@@ -417,6 +421,7 @@ public final class ActiveWorkoutViewModel {
                 return
             }
             timerEndDate = Date().addingTimeInterval(Double(restTimeRemaining))
+            NotificationManager.shared.scheduleRestFinishedNotification(after: TimeInterval(restTimeRemaining))
             AudioAlertService.shared.startBackgroundAudio()
             startTimerCountdown()
 
@@ -440,6 +445,7 @@ public final class ActiveWorkoutViewModel {
     private func beginRestDismissal() {
         restDismissalTask?.cancel()
         isRestFinishing = true
+        NotificationManager.shared.cancelRestFinishedNotification()
 
         restDismissalTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 260_000_000)
@@ -455,6 +461,7 @@ public final class ActiveWorkoutViewModel {
     }
 
     private func clearRestState() {
+        NotificationManager.shared.cancelRestFinishedNotification()
         restDismissalTask?.cancel()
         restDismissalTask = nil
         timerTask?.cancel()
@@ -545,6 +552,7 @@ public final class ActiveWorkoutViewModel {
     public func startWorkoutActivityIfNeeded() {
         guard session.endDate == nil, !didStartWorkoutActivity else { return }
         didStartWorkoutActivity = true
+        NotificationManager.shared.requestAuthorization()
         AudioAlertService.shared.startBackgroundAudio()
 
         let info = currentExerciseInfo()
@@ -582,6 +590,7 @@ public final class ActiveWorkoutViewModel {
 
     private func endWorkoutActivity() {
         didStartWorkoutActivity = false
+        NotificationManager.shared.cancelRestFinishedNotification()
         AudioAlertService.shared.stopBackgroundAudio()
         HealthKitManager.shared.endWorkoutLiveActivity()
     }
