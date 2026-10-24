@@ -557,7 +557,7 @@ public final class ActiveWorkoutViewModel {
 
         let info = currentExerciseInfo()
         let elapsed = max(0, Date().timeIntervalSince(session.startDate))
-        let snapshot = HealthKitManager.LiveActivitySnapshot(
+        let snapshot = LiveActivityManager.Snapshot(
             exerciseName: info.name,
             currentSet: info.currentSet,
             totalSets: info.totalSets,
@@ -565,7 +565,7 @@ public final class ActiveWorkoutViewModel {
             totalSessionTime: formatDuration(elapsed)
         )
 
-        HealthKitManager.shared.startWorkoutLiveActivity(
+        LiveActivityManager.shared.startActivity(
             workoutName: routine.name,
             snapshot: snapshot,
             bpm: HealthKitManager.shared.currentBPM
@@ -577,7 +577,7 @@ public final class ActiveWorkoutViewModel {
 
         let info = currentExerciseInfo()
         let elapsed = max(0, Date().timeIntervalSince(session.startDate))
-        let snapshot = HealthKitManager.LiveActivitySnapshot(
+        let snapshot = LiveActivityManager.Snapshot(
             exerciseName: info.name,
             currentSet: info.currentSet,
             totalSets: info.totalSets,
@@ -585,14 +585,14 @@ public final class ActiveWorkoutViewModel {
             totalSessionTime: formatDuration(elapsed)
         )
 
-        HealthKitManager.shared.updateLiveActivitySnapshot(snapshot)
+        LiveActivityManager.shared.updateSnapshot(snapshot)
     }
 
     private func endWorkoutActivity() {
         didStartWorkoutActivity = false
         NotificationManager.shared.cancelRestFinishedNotification()
         AudioAlertService.shared.stopBackgroundAudio()
-        HealthKitManager.shared.endWorkoutLiveActivity()
+        LiveActivityManager.shared.endActivity()
     }
 
     private func currentExerciseInfo() -> (name: String, currentSet: Int, totalSets: Int) {

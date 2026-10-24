@@ -7,6 +7,7 @@ public struct ActiveWorkoutView: View {
     @Environment(\.dismiss) private var dismiss
 
     @ObservedObject private var healthKitManager = HealthKitManager.shared
+    @ObservedObject private var liveActivityManager = LiveActivityManager.shared
 
     @State private var viewModel: ActiveWorkoutViewModel
     @State private var showingCancelConfirmation = false
@@ -357,7 +358,7 @@ public struct ActiveWorkoutView: View {
                     .font(.subheadline)
                     .foregroundStyle(.red)
 
-                Text("Diagnóstico HealthKit")
+                Text("Diagnóstico")
                     .font(.subheadline.bold())
                     .foregroundStyle(.white)
 
@@ -365,6 +366,12 @@ public struct ActiveWorkoutView: View {
             }
 
             Text("Estado: \(healthKitManager.debugMessage)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.leading)
+
+            Text("Live Activity: \(liveActivityManager.debugMessage)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
