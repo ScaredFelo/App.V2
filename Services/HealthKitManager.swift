@@ -156,7 +156,7 @@ final class HealthKitManager: ObservableObject {
             self.currentBPM = bpm
             self.dataSourceName = sourceName
             self.debugMessage = "Leyendo pulsaciones de \(sourceName)"
-            LiveActivityManager.shared.updateBPM(bpm)
+            LiveActivityManager.shared.setBPM(bpm)
         }
     }
 }

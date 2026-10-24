@@ -7,7 +7,6 @@ public struct WorkoutActivityAttributes: ActivityAttributes {
         public var currentSet: Int
         public var totalSets: Int
         public var timerText: String
-        public var totalSessionTime: String
         public var currentBPM: Int
 
         public init(
@@ -15,14 +14,12 @@ public struct WorkoutActivityAttributes: ActivityAttributes {
             currentSet: Int,
             totalSets: Int,
             timerText: String,
-            totalSessionTime: String,
             currentBPM: Int
         ) {
             self.exerciseName = exerciseName
             self.currentSet = currentSet
             self.totalSets = totalSets
             self.timerText = timerText
-            self.totalSessionTime = totalSessionTime
             self.currentBPM = currentBPM
         }
     }

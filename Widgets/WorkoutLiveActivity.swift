@@ -49,9 +49,16 @@ struct WorkoutLiveActivity: Widget {
                     .font(.subheadline.bold())
                     .foregroundStyle(.green)
 
-                Text("Tiempo total: \(context.state.totalSessionTime)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Image(systemName: "stopwatch.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+
+                    Text(context.state.timerText)
+                        .font(.caption.bold())
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                }
             }
 
             Spacer(minLength: 4)
@@ -82,9 +89,16 @@ struct WorkoutLiveActivity: Widget {
                 .font(.caption.bold())
                 .foregroundStyle(.green)
 
-            Text("Tiempo total: \(context.state.totalSessionTime)")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            HStack(spacing: 4) {
+                Image(systemName: "stopwatch.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.green)
+
+                Text(context.state.timerText)
+                    .font(.caption2.bold())
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+            }
         }
     }
 

@@ -33,6 +33,8 @@ public final class WorkoutSetLog {
     public var weight: Double
     public var reps: Int
     public var isCompleted: Bool
+    public var routineExerciseID: UUID?
+    public var setNumber: Int?
 
     public var exercise: Exercise?
     public var session: WorkoutSession?
@@ -43,6 +45,8 @@ public final class WorkoutSetLog {
         weight: Double = 0.0,
         reps: Int = 0,
         isCompleted: Bool = false,
+        routineExerciseID: UUID? = nil,
+        setNumber: Int? = nil,
         exercise: Exercise? = nil,
         session: WorkoutSession? = nil
     ) {
@@ -51,6 +55,8 @@ public final class WorkoutSetLog {
         self.weight = weight
         self.reps = reps
         self.isCompleted = isCompleted
+        self.routineExerciseID = routineExerciseID
+        self.setNumber = setNumber
         self.exercise = exercise
         self.session = session
     }

@@ -19,7 +19,8 @@ public final class ActiveWorkoutViewModel {
     public var restTargetBpm: Int?
     public var currentRestModeTitle = ""
     public var currentExerciseName = ""
-    public var timerEndDate: Date?
+    public var timerStartDate: Date?
+    public var timerTargetDuration = 0
     public var isTimerMinimized: Bool = false
     public var isRestFinishing: Bool = false
 
@@ -86,9 +87,26 @@ public final class ActiveWorkoutViewModel {
         )
 
         let pastLogs = (try? modelContext.fetch(descriptor)) ?? []
+        let currentLogs = session.setsCompleted.filter {
+            $0.exercise?.id == exerciseID && $0.isCompleted
+        }
+        var legacyLogs = currentLogs
+            .filter { $0.routineExerciseID == nil }
+            .sorted { $0.date < $1.date }
         var sets: [SetInputState] = []
 
         for i in 1...max(1, routineExercise.defaultSets) {
+            let stableLog = currentLogs.first {
+                $0.routineExerciseID == routineExercise.id && $0.setNumber == i
+            }
+            let legacyLog: WorkoutSetLog?
+            if stableLog == nil, !legacyLogs.isEmpty {
+                legacyLog = legacyLogs.removeFirst()
+            } else {
+                legacyLog = nil
+            }
+            let currentLog = stableLog ?? legacyLog
+
             let matchingLog = pastLogs.indices.contains(i - 1) ? pastLogs[i - 1] : pastLogs.first
             let ghostW = matchingLog?.weight
             let ghostR = matchingLog?.reps
@@ -97,11 +115,12 @@ public final class ActiveWorkoutViewModel {
 
             sets.append(SetInputState(
                 setNumber: i,
-                weight: initialWeight,
-                reps: initialReps,
-                isCompleted: false,
+                weight: currentLog?.weight ?? initialWeight,
+                reps: currentLog?.reps ?? initialReps,
+                isCompleted: currentLog != nil,
                 ghostWeight: ghostW,
-                ghostReps: ghostR
+                ghostReps: ghostR,
+                existingLog: currentLog
             ))
         }
 
@@ -240,6 +259,8 @@ public final class ActiveWorkoutViewModel {
                 weight: targetSet.weight,
                 reps: targetSet.reps,
                 isCompleted: true,
+                routineExerciseID: routineExerciseID,
+                setNumber: setIndex + 1,
                 exercise: exercise,
                 session: session
             )
@@ -279,8 +300,6 @@ public final class ActiveWorkoutViewModel {
             session.totalVolumeKg = max(0, session.totalVolumeKg - volumeToSubtract)
             try? modelContext.save()
         }
-
-        refreshLiveActivity()
     }
 
     // MARK: - Rest Timer & BPM Drop Logic
@@ -297,8 +316,9 @@ public final class ActiveWorkoutViewModel {
         case .timer(let seconds):
             totalRestSeconds = seconds
             restTimeRemaining = seconds
+            timerStartDate = Date()
+            timerTargetDuration = seconds
             currentRestModeTitle = "Descanso (\(seconds)s)"
-            timerEndDate = Date().addingTimeInterval(Double(seconds))
             NotificationManager.shared.scheduleRestFinishedNotification(after: TimeInterval(seconds))
             AudioAlertService.shared.startBackgroundAudio()
             startTimerCountdown()
@@ -306,19 +326,19 @@ public final class ActiveWorkoutViewModel {
         case .bpmDrop(let targetBpm):
             restTargetBpm = targetBpm
             currentRestModeTitle = "Esperando recuperación (< \(targetBpm) BPM)"
-            timerEndDate = Date()
+            timerStartDate = nil
+            timerTargetDuration = 0
             startBpmRecoveryObserver(targetBpm: targetBpm)
         }
-
-        refreshLiveActivity()
     }
 
     private func startTimerCountdown() {
         timerTask?.cancel()
         timerTask = Task { [weak self] in
             while !Task.isCancelled {
-                guard let self, !self.isRestPaused, let endDate = self.timerEndDate else { return }
-                let remaining = Int(ceil(endDate.timeIntervalSinceNow))
+                guard let self, !self.isRestPaused, let startDate = self.timerStartDate else { return }
+                let elapsed = Date().timeIntervalSince(startDate)
+                let remaining = Int(ceil(Double(self.timerTargetDuration) - elapsed))
                 self.restTimeRemaining = max(0, remaining)
 
                 if remaining <= 0 {
@@ -354,12 +374,11 @@ public final class ActiveWorkoutViewModel {
         if isRestPaused {
             restTimeRemaining += 10
             totalRestSeconds += 10
-            timerEndDate = Date().addingTimeInterval(Double(restTimeRemaining))
-        } else if let endDate = timerEndDate {
-            let newEndDate = endDate.addingTimeInterval(10)
-            timerEndDate = newEndDate
+            timerTargetDuration = restTimeRemaining
+        } else if timerStartDate != nil {
+            timerTargetDuration += 10
             totalRestSeconds += 10
-            restTimeRemaining = max(0, Int(ceil(newEndDate.timeIntervalSinceNow)))
+            updateRestRemainingFromClock()
             NotificationManager.shared.scheduleRestFinishedNotification(after: TimeInterval(restTimeRemaining))
         }
     }
@@ -373,16 +392,18 @@ public final class ActiveWorkoutViewModel {
             if restTimeRemaining <= 0 {
                 finishRest()
             } else {
-                timerEndDate = Date().addingTimeInterval(Double(restTimeRemaining))
+                timerTargetDuration = restTimeRemaining
             }
-        } else if let endDate = timerEndDate {
-            let newEndDate = endDate.addingTimeInterval(-10)
-            let remaining = Int(ceil(newEndDate.timeIntervalSinceNow))
+        } else if let startDate = timerStartDate {
+            let newTarget = timerTargetDuration - 10
+            let remaining = Int(ceil(Double(newTarget) - Date().timeIntervalSince(startDate)))
 
             if remaining <= 0 {
+                timerTargetDuration = max(0, newTarget)
+                restTimeRemaining = 0
                 finishRest()
             } else {
-                timerEndDate = newEndDate
+                timerTargetDuration = newTarget
                 totalRestSeconds = max(10, totalRestSeconds - 10)
                 restTimeRemaining = remaining
                 NotificationManager.shared.scheduleRestFinishedNotification(after: TimeInterval(remaining))
@@ -400,19 +421,18 @@ public final class ActiveWorkoutViewModel {
         bpmObserverTask = nil
         NotificationManager.shared.cancelRestFinishedNotification()
 
-        if let condition = currentRestCondition, case .timer = condition, let endDate = timerEndDate {
-            restTimeRemaining = max(0, Int(ceil(endDate.timeIntervalSinceNow)))
-            timerEndDate = Date().addingTimeInterval(Double(restTimeRemaining))
+        if let condition = currentRestCondition, case .timer = condition, timerStartDate != nil {
+            updateRestRemainingFromClock()
+            timerStartDate = nil
+            timerTargetDuration = restTimeRemaining
         }
 
-        refreshLiveActivity()
     }
 
     public func resumeRest() {
         guard isResting, isRestPaused, let condition = currentRestCondition else { return }
 
         isRestPaused = false
-        refreshLiveActivity()
 
         switch condition {
         case .timer:
@@ -420,15 +440,21 @@ public final class ActiveWorkoutViewModel {
                 finishRest()
                 return
             }
-            timerEndDate = Date().addingTimeInterval(Double(restTimeRemaining))
+            timerStartDate = Date()
+            timerTargetDuration = restTimeRemaining
             NotificationManager.shared.scheduleRestFinishedNotification(after: TimeInterval(restTimeRemaining))
             AudioAlertService.shared.startBackgroundAudio()
             startTimerCountdown()
 
         case .bpmDrop(let targetBpm):
-            timerEndDate = Date()
             startBpmRecoveryObserver(targetBpm: targetBpm)
         }
+    }
+
+    private func updateRestRemainingFromClock() {
+        guard let startDate = timerStartDate else { return }
+        let elapsed = Date().timeIntervalSince(startDate)
+        restTimeRemaining = max(0, Int(ceil(Double(timerTargetDuration) - elapsed)))
     }
 
     public func skipRest() {
@@ -452,7 +478,6 @@ public final class ActiveWorkoutViewModel {
             guard let self, !Task.isCancelled, self.isRestFinishing else { return }
 
             self.clearRestState()
-            self.refreshLiveActivity()
         }
     }
 
@@ -472,7 +497,8 @@ public final class ActiveWorkoutViewModel {
         isRestFinishing = false
         isRestPaused = false
         restTargetBpm = nil
-        timerEndDate = nil
+        timerStartDate = nil
+        timerTargetDuration = 0
         currentRestCondition = nil
     }
 
@@ -556,13 +582,11 @@ public final class ActiveWorkoutViewModel {
         AudioAlertService.shared.startBackgroundAudio()
 
         let info = currentExerciseInfo()
-        let elapsed = max(0, Date().timeIntervalSince(session.startDate))
         let snapshot = LiveActivityManager.Snapshot(
             exerciseName: info.name,
             currentSet: info.currentSet,
             totalSets: info.totalSets,
-            timerText: liveActivityTimerText(elapsed: elapsed),
-            totalSessionTime: formatDuration(elapsed)
+            timerText: liveActivityTimerText()
         )
 
         LiveActivityManager.shared.startActivity(
@@ -576,13 +600,11 @@ public final class ActiveWorkoutViewModel {
         guard didStartWorkoutActivity, session.endDate == nil else { return }
 
         let info = currentExerciseInfo()
-        let elapsed = max(0, Date().timeIntervalSince(session.startDate))
         let snapshot = LiveActivityManager.Snapshot(
             exerciseName: info.name,
             currentSet: info.currentSet,
             totalSets: info.totalSets,
-            timerText: liveActivityTimerText(elapsed: elapsed),
-            totalSessionTime: formatDuration(elapsed)
+            timerText: liveActivityTimerText()
         )
 
         LiveActivityManager.shared.updateSnapshot(snapshot)
@@ -627,14 +649,20 @@ public final class ActiveWorkoutViewModel {
         return (routine.name, 0, 0)
     }
 
-    private func liveActivityTimerText(elapsed: TimeInterval) -> String {
-        if isResting, let condition = currentRestCondition {
-            if case .timer = condition {
-                return formatDuration(TimeInterval(max(0, restTimeRemaining)))
-            }
+    private func liveActivityTimerText() -> String {
+        guard isResting, let condition = currentRestCondition, case .timer = condition else {
+            return formatDuration(0)
         }
 
-        return formatDuration(elapsed)
+        let remaining: Int
+        if let startDate = timerStartDate {
+            let elapsed = Date().timeIntervalSince(startDate)
+            remaining = Int(ceil(Double(timerTargetDuration) - elapsed))
+        } else {
+            remaining = restTimeRemaining
+        }
+
+        return formatDuration(TimeInterval(max(0, remaining)))
     }
 
     private func formatDuration(_ interval: TimeInterval) -> String {
