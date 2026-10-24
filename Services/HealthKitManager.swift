@@ -2,23 +2,41 @@ import Foundation
 import HealthKit
 import Combine
 
-final class HealthKitManager: ObservableObject {
+final class HealthKitManager: NSObject, ObservableObject {
     static let shared = HealthKitManager()
 
     @Published var currentBPM: Int = 0
     @Published private(set) var isAuthorized: Bool = false
+    @Published var debugMessage: String = "Pendiente de autorización"
     @Published private(set) var dataSourceName: String = "Buscando..."
 
     private let healthStore = HKHealthStore()
     private let heartRateType = HKObjectType.quantityType(forIdentifier: .heartRate)
     private var heartRateQuery: HKAnchoredObjectQuery?
     private var anchor: HKQueryAnchor?
+    private var workoutSession: HKWorkoutSession?
 
     private var bpmUnit: HKUnit {
         HKUnit.count().unitDivided(by: HKUnit.minute())
     }
 
-    private init() {}
+    private override init() {
+        super.init()
+    }
+
+    private enum HealthKitRequestError: LocalizedError {
+        case healthDataUnavailable
+        case heartRateTypeUnavailable
+
+        var errorDescription: String? {
+            switch self {
+            case .healthDataUnavailable:
+                return "HealthKit no está disponible en este dispositivo."
+            case .heartRateTypeUnavailable:
+                return "No se pudo acceder al tipo de frecuencia cardíaca."
+            }
+        }
+    }
 
     // MARK: - Authorization
 
@@ -27,39 +45,77 @@ final class HealthKitManager: ObservableObject {
     }
 
     func requestAuthorization() {
-        guard HKHealthStore.isHealthDataAvailable(), let heartRateType else {
-            DispatchQueue.main.async { [weak self] in
-                self?.dataSourceName = "HealthKit no disponible"
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+
+            do {
+                try self.performAuthorizationRequest()
+            } catch {
+                self.debugMessage = error.localizedDescription
+                print("[HealthKit] Error: \(error.localizedDescription)")
             }
-            return
+        }
+    }
+
+    private func performAuthorizationRequest() throws {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            throw HealthKitRequestError.healthDataUnavailable
+        }
+
+        guard let heartRateType else {
+            throw HealthKitRequestError.heartRateTypeUnavailable
         }
 
         let workoutType = HKObjectType.workoutType()
 
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+        healthStore.requestAuthorization(toShare: [workoutType], read: [heartRateType]) { [weak self] success, error in
+            print("[HealthKit] Autorización completada")
 
-            self.healthStore.requestAuthorization(toShare: [workoutType], read: [heartRateType]) { [weak self] success, error in
-                print("[HealthKit] Autorización completada")
+            DispatchQueue.main.async {
+                guard let self else { return }
 
-                DispatchQueue.main.async {
-                    guard let self else { return }
+                do {
+                    if let error {
+                        throw error
+                    }
+
                     self.isAuthorized = success
 
-                    if let error {
-                        self.dataSourceName = "Error de permisos"
-                        print("HealthKit error de autorización: \(error.localizedDescription)")
-                        return
-                    }
-
                     guard success else {
-                        self.dataSourceName = "Permiso denegado"
+                        self.debugMessage = "Permisos denegados por el usuario"
                         return
                     }
 
+                    self.debugMessage = "Autorizado. Esperando lecturas de BPM..."
+                    self.startWorkoutSession()
                     self.startObservingHeartRate()
+                } catch {
+                    self.isAuthorized = false
+                    self.debugMessage = error.localizedDescription
+                    print("[HealthKit] Error de autorización: \(error.localizedDescription)")
                 }
             }
+        }
+    }
+
+    // MARK: - Workout Session
+
+    private func startWorkoutSession() {
+        guard workoutSession == nil else { return }
+
+        let configuration = HKWorkoutConfiguration()
+        configuration.activityType = .traditionalStrengthTraining
+        configuration.locationType = .indoor
+
+        do {
+            let session = try HKWorkoutSession(healthStore: healthStore, configuration: configuration)
+            session.delegate = self
+            workoutSession = session
+            session.startActivity(with: Date())
+            debugMessage = "Sesión de entrenamiento activa"
+        } catch {
+            debugMessage = error.localizedDescription
+            print("[HealthKit] Error al iniciar HKWorkoutSession: \(error.localizedDescription)")
         }
     }
 
@@ -120,6 +176,40 @@ final class HealthKitManager: ObservableObject {
             guard let self else { return }
             self.currentBPM = bpm
             self.dataSourceName = sourceName
+        }
+    }
+}
+
+// MARK: - HKWorkoutSessionDelegate
+
+extension HealthKitManager: HKWorkoutSessionDelegate {
+    func workoutSession(
+        _ workoutSession: HKWorkoutSession,
+        didChangeTo toState: HKWorkoutSessionState,
+        from fromState: HKWorkoutSessionState,
+        date: Date
+    ) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+
+            switch toState {
+            case .running:
+                self.debugMessage = "Sesión de entrenamiento activa"
+            case .ended:
+                self.debugMessage = "Sesión de entrenamiento finalizada"
+                self.workoutSession = nil
+            default:
+                break
+            }
+        }
+    }
+
+    func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.debugMessage = error.localizedDescription
+            self.workoutSession = nil
+            print("[HealthKit] Error en la sesión de entrenamiento: \(error.localizedDescription)")
         }
     }
 }

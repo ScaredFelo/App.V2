@@ -42,7 +42,7 @@ public struct ActiveWorkoutView: View {
                         .padding(.top, 10)
 
                     if healthKitManager.currentBPM == 0 {
-                        appleHealthConnectionButton
+                        healthKitDiagnosticBanner
                     }
 
                     let _ = viewModel.structureVersion
@@ -349,25 +349,49 @@ public struct ActiveWorkoutView: View {
         }
     }
 
-    private var appleHealthConnectionButton: some View {
-        Button {
-            HealthKitManager.shared.requestAuthorization()
-        } label: {
-            Label("Conectar Apple Salud / AirPods", systemImage: "heart.fill")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.9))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Color.black.opacity(0.55), in: Capsule())
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                )
-                .fixedSize()
+    private var healthKitDiagnosticBanner: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "heart.text.square.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.red)
+
+                Text("Diagnóstico HealthKit")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+
+                Spacer(minLength: 0)
+            }
+
+            Text("Estado: \(healthKitManager.debugMessage)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.leading)
+
+            Button {
+                HealthKitManager.shared.requestAuthorization()
+            } label: {
+                Label("Conectar Apple Salud / AirPods", systemImage: "heart.fill")
+                    .font(.footnote.bold())
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Color.white, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Conectar Apple Salud o AirPods")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Conectar Apple Salud o AirPods")
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Color(.systemGray6).opacity(0.12),
+            in: RoundedRectangle(cornerRadius: 16)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.red.opacity(0.25), lineWidth: 1)
+        )
     }
 
     private var workoutHeader: some View {
