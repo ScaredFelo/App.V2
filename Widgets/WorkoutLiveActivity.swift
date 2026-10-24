@@ -19,86 +19,18 @@ struct WorkoutLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(context.attributes.workoutName.uppercased())
-                            .font(.caption2.bold())
-                            .tracking(1.2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-
-                        Text(context.state.isPaused ? "PAUSADO" : "EN CURSO")
-                            .font(.caption2.bold())
-                            .foregroundStyle(context.state.isPaused ? Color.orange : Color.green)
-                    }
-                }
-
-                DynamicIslandExpandedRegion(.center) {
-                    timerText(context)
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                    expandedSummary(context)
                 }
 
                 DynamicIslandExpandedRegion(.trailing) {
-                    BPMDial(bpm: context.state.currentBPM)
-                        .frame(width: 58, height: 58)
-                }
-
-                DynamicIslandExpandedRegion(.bottom) {
-                    HStack(spacing: 6) {
-                        Image(systemName: context.state.isPaused ? "pause.circle.fill" : "bolt.fill")
-                            .foregroundStyle(context.state.isPaused ? Color.orange : Color.green)
-
-                        Text(context.state.isPaused ? "Entrenamiento pausado" : "Entrenamiento activo")
-                            .font(.caption2.bold())
-                            .foregroundStyle(context.state.isPaused ? Color.orange : Color.green)
-
-                        Spacer(minLength: 8)
-
-                        Text("AppGym")
-                            .font(.caption2.bold())
-                            .foregroundStyle(.secondary)
-                    }
+                    bpmGauge(context)
                 }
             } compactLeading: {
-                HStack(spacing: 4) {
-                    Image(systemName: "bolt.fill")
-                        .foregroundStyle(.green)
-
-                    timerText(context)
-                        .font(.caption2.bold())
-                        .monospacedDigit()
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.65)
-                }
+                compactTimer(context)
             } compactTrailing: {
-                HStack(spacing: 3) {
-                    Image(systemName: "heart.fill")
-                        .foregroundStyle(.red)
-
-                    Text(context.state.currentBPM > 0 ? "\(context.state.currentBPM) BPM" : "-- BPM")
-                        .font(.caption2.bold())
-                        .monospacedDigit()
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.65)
-                }
+                compactBPM(context)
             } minimal: {
-                HStack(spacing: 2) {
-                    Image(systemName: "heart.fill")
-                        .foregroundStyle(.red)
-
-                    Text(context.state.currentBPM > 0 ? "\(context.state.currentBPM)" : "--")
-                        .font(.caption2.bold())
-                        .monospacedDigit()
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.65)
-                }
+                minimalTimer(context)
             }
             .keylineTint(.red)
         }
@@ -107,33 +39,18 @@ struct WorkoutLiveActivity: Widget {
     private func lockScreenView(_ context: ActivityViewContext<WorkoutActivityAttributes>) -> some View {
         HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: "dumbbell.fill")
-                        .foregroundStyle(.green)
+                Text(exerciseName(context))
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.65)
 
-                    Text(context.attributes.workoutName.uppercased())
-                        .font(.caption2.bold())
-                        .tracking(1.1)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
+                Text(seriesText(context))
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.green)
 
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    timerText(context)
-                        .font(.system(size: 34, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.65)
-
-                    Text(context.state.isPaused ? "PAUSA" : "EN CURSO")
-                        .font(.caption2.bold())
-                        .foregroundStyle(context.state.isPaused ? Color.orange : Color.green)
-                }
-
-                Label(context.state.isPaused ? "Entrenamiento pausado" : "Entrenamiento en directo", systemImage: "waveform.path.ecg")
-                    .font(.caption2)
+                Text("Tiempo total: \(context.state.totalSessionTime)")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
@@ -141,7 +58,7 @@ struct WorkoutLiveActivity: Widget {
 
             VStack(spacing: 4) {
                 BPMDial(bpm: context.state.currentBPM)
-                    .frame(width: 66, height: 66)
+                    .frame(width: 72, height: 72)
 
                 Text("BPM")
                     .font(.caption2.bold())
@@ -153,8 +70,86 @@ struct WorkoutLiveActivity: Widget {
         .padding(.vertical, 14)
     }
 
-    private func timerText(_ context: ActivityViewContext<WorkoutActivityAttributes>) -> some View {
-        Text(Date().addingTimeInterval(-context.state.elapsedTime), style: .timer)
+    private func expandedSummary(_ context: ActivityViewContext<WorkoutActivityAttributes>) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(exerciseName(context))
+                .font(.system(size: 19, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+
+            Text(seriesText(context))
+                .font(.caption.bold())
+                .foregroundStyle(.green)
+
+            Text("Tiempo total: \(context.state.totalSessionTime)")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func bpmGauge(_ context: ActivityViewContext<WorkoutActivityAttributes>) -> some View {
+        VStack(spacing: 3) {
+            BPMDial(bpm: context.state.currentBPM)
+                .frame(width: 58, height: 58)
+
+            Text("BPM")
+                .font(.caption2.bold())
+                .tracking(1.2)
+                .foregroundStyle(.red)
+        }
+    }
+
+    private func compactTimer(_ context: ActivityViewContext<WorkoutActivityAttributes>) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "stopwatch.fill")
+                .foregroundStyle(.green)
+
+            Text(context.state.timerText)
+                .font(.caption2.bold())
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+    }
+
+    private func compactBPM(_ context: ActivityViewContext<WorkoutActivityAttributes>) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: "heart.fill")
+                .foregroundStyle(.red)
+
+            Text(context.state.currentBPM > 0 ? "\(context.state.currentBPM) BPM" : "-- BPM")
+                .font(.caption2.bold())
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+    }
+
+    private func minimalTimer(_ context: ActivityViewContext<WorkoutActivityAttributes>) -> some View {
+        HStack(spacing: 2) {
+            Image(systemName: "stopwatch.fill")
+                .foregroundStyle(.green)
+
+            Text(context.state.timerText)
+                .font(.caption2.bold())
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+        }
+    }
+
+    private func exerciseName(_ context: ActivityViewContext<WorkoutActivityAttributes>) -> String {
+        let name = context.state.exerciseName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? context.attributes.workoutName : name
+    }
+
+    private func seriesText(_ context: ActivityViewContext<WorkoutActivityAttributes>) -> String {
+        guard context.state.totalSets > 0 else { return "Sin series" }
+        return "Serie \(context.state.currentSet) de \(context.state.totalSets)"
     }
 }
 
@@ -196,7 +191,7 @@ private struct BPMDial: View {
                     .foregroundStyle(.red)
 
                 Text(bpm > 0 ? "\(bpm)" : "--")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .font(.system(size: 19, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(.white)
                     .lineLimit(1)

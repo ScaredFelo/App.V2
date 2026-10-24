@@ -2,7 +2,6 @@ import Foundation
 import SwiftData
 import SwiftUI
 import Combine
-import ActivityKit
 
 @Observable
 @MainActor
@@ -27,7 +26,9 @@ public final class ActiveWorkoutViewModel {
     private var timerTask: Task<Void, Never>?
     private var bpmObserverTask: Task<Void, Never>?
     private var restDismissalTask: Task<Void, Never>?
-    private var workoutActivity: Activity<WorkoutActivityAttributes>?
+    private var didStartWorkoutActivity = false
+    private var restingSetNumber = 0
+    private var restingTotalSets = 0
     private var cancellables = Set<AnyCancellable>()
     private var currentRestCondition: RestCondition?
 
@@ -63,7 +64,7 @@ public final class ActiveWorkoutViewModel {
         self.routine = routine
         setupInitialSets(modelContext: modelContext)
         captureOriginalStructure()
-        setupBPMObserver()
+        setupLiveActivityTimer()
         HealthKitManager.shared.requestAuthorization()
     }
 
@@ -257,6 +258,8 @@ public final class ActiveWorkoutViewModel {
                     condition = exercise.defaultRestCondition
                 }
                 currentExerciseName = exercise.name
+                restingSetNumber = setIndex + 1
+                restingTotalSets = sets.count
                 startRest(with: condition, exerciseName: exercise.name)
             }
         } else {
@@ -276,6 +279,8 @@ public final class ActiveWorkoutViewModel {
             session.totalVolumeKg = max(0, session.totalVolumeKg - volumeToSubtract)
             try? modelContext.save()
         }
+
+        refreshLiveActivity()
     }
 
     // MARK: - Rest Timer & BPM Drop Logic
@@ -304,7 +309,7 @@ public final class ActiveWorkoutViewModel {
             startBpmRecoveryObserver(targetBpm: targetBpm)
         }
 
-        updateLiveActivity()
+        refreshLiveActivity()
     }
 
     private func startTimerCountdown() {
@@ -390,21 +395,20 @@ public final class ActiveWorkoutViewModel {
         timerTask = nil
         bpmObserverTask?.cancel()
         bpmObserverTask = nil
-        AudioAlertService.shared.stopBackgroundAudio()
 
         if let condition = currentRestCondition, case .timer = condition, let endDate = timerEndDate {
             restTimeRemaining = max(0, Int(ceil(endDate.timeIntervalSinceNow)))
             timerEndDate = Date().addingTimeInterval(Double(restTimeRemaining))
         }
 
-        updateLiveActivity()
+        refreshLiveActivity()
     }
 
     public func resumeRest() {
         guard isResting, isRestPaused, let condition = currentRestCondition else { return }
 
         isRestPaused = false
-        updateLiveActivity()
+        refreshLiveActivity()
 
         switch condition {
         case .timer:
@@ -442,7 +446,7 @@ public final class ActiveWorkoutViewModel {
             guard let self, !Task.isCancelled, self.isRestFinishing else { return }
 
             self.clearRestState()
-            self.updateLiveActivity()
+            self.refreshLiveActivity()
         }
     }
 
@@ -451,7 +455,6 @@ public final class ActiveWorkoutViewModel {
     }
 
     private func clearRestState() {
-        AudioAlertService.shared.stopBackgroundAudio()
         restDismissalTask?.cancel()
         restDismissalTask = nil
         timerTask?.cancel()
@@ -526,85 +529,115 @@ public final class ActiveWorkoutViewModel {
         try? modelContext.save()
     }
 
-    // MARK: - BPM Observer
-    private func setupBPMObserver() {
-        HealthKitManager.shared.$currentBPM
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] newBPM in
-                guard let self, newBPM > 0 else { return }
+    // MARK: - Live Activity
+
+    private func setupLiveActivityTimer() {
+        Timer.publish(every: 1, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
                 Task { @MainActor in
-                    self.updateLiveActivity(bpm: newBPM)
+                    self?.refreshLiveActivity()
                 }
             }
             .store(in: &cancellables)
     }
 
-    // MARK: - ActivityKit (Live Activities / Dynamic Island)
     public func startWorkoutActivityIfNeeded() {
-        guard session.endDate == nil, workoutActivity == nil else { return }
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        guard session.endDate == nil, !didStartWorkoutActivity else { return }
+        didStartWorkoutActivity = true
+        AudioAlertService.shared.startBackgroundAudio()
 
-        for activity in Activity<WorkoutActivityAttributes>.activities {
-            Task { await activity.end(nil, dismissalPolicy: .immediate) }
-        }
-
-        let attributes = WorkoutActivityAttributes(workoutName: routine.name)
-        let content = ActivityContent(
-            state: makeContentState(bpm: HealthKitManager.shared.currentBPM, isPaused: isRestPaused),
-            staleDate: nil
+        let info = currentExerciseInfo()
+        let elapsed = max(0, Date().timeIntervalSince(session.startDate))
+        let snapshot = HealthKitManager.LiveActivitySnapshot(
+            exerciseName: info.name,
+            currentSet: info.currentSet,
+            totalSets: info.totalSets,
+            timerText: liveActivityTimerText(elapsed: elapsed),
+            totalSessionTime: formatDuration(elapsed)
         )
 
-        do {
-            workoutActivity = try Activity<WorkoutActivityAttributes>.request(
-                attributes: attributes,
-                content: content,
-                pushType: nil
-            )
-        } catch {
-            print("Error iniciando Live Activity: \(error.localizedDescription)")
-        }
+        HealthKitManager.shared.startWorkoutLiveActivity(
+            workoutName: routine.name,
+            snapshot: snapshot,
+            bpm: HealthKitManager.shared.currentBPM
+        )
     }
 
-    private func updateLiveActivity(bpm: Int? = nil) {
-        guard let activity = workoutActivity else { return }
+    private func refreshLiveActivity() {
+        guard didStartWorkoutActivity, session.endDate == nil else { return }
 
-        let state = makeContentState(
-            bpm: bpm ?? HealthKitManager.shared.currentBPM,
-            isPaused: isRestPaused
+        let info = currentExerciseInfo()
+        let elapsed = max(0, Date().timeIntervalSince(session.startDate))
+        let snapshot = HealthKitManager.LiveActivitySnapshot(
+            exerciseName: info.name,
+            currentSet: info.currentSet,
+            totalSets: info.totalSets,
+            timerText: liveActivityTimerText(elapsed: elapsed),
+            totalSessionTime: formatDuration(elapsed)
         )
 
-        Task {
-            await activity.update(ActivityContent(state: state, staleDate: nil))
-        }
+        HealthKitManager.shared.updateLiveActivitySnapshot(snapshot)
     }
 
     private func endWorkoutActivity() {
+        didStartWorkoutActivity = false
         AudioAlertService.shared.stopBackgroundAudio()
-        let activities = Activity<WorkoutActivityAttributes>.activities
-        workoutActivity = nil
-        guard !activities.isEmpty else { return }
+        HealthKitManager.shared.endWorkoutLiveActivity()
+    }
 
-        let finalState = makeContentState(
-            bpm: HealthKitManager.shared.currentBPM,
-            isPaused: false
-        )
+    private func currentExerciseInfo() -> (name: String, currentSet: Int, totalSets: Int) {
+        if isResting, !currentExerciseName.isEmpty, restingTotalSets > 0 {
+            return (currentExerciseName, restingSetNumber, restingTotalSets)
+        }
 
-        Task {
-            for activity in activities {
-                await activity.end(
-                    ActivityContent(state: finalState, staleDate: nil),
-                    dismissalPolicy: .immediate
+        let exercises = routine.exercises.sorted { $0.sortOrder < $1.sortOrder }
+
+        for routineExercise in exercises {
+            guard let sets = activeSets[routineExercise.id], !sets.isEmpty else { continue }
+
+            if let nextSetIndex = sets.firstIndex(where: { !$0.isCompleted }) {
+                return (
+                    routineExercise.exercise?.name ?? "Ejercicio",
+                    nextSetIndex + 1,
+                    sets.count
                 )
             }
         }
+
+        if let lastExercise = exercises.last,
+           let sets = activeSets[lastExercise.id],
+           !sets.isEmpty {
+            return (
+                lastExercise.exercise?.name ?? "Ejercicio",
+                sets.count,
+                sets.count
+            )
+        }
+
+        return (routine.name, 0, 0)
     }
 
-    private func makeContentState(bpm: Int, isPaused: Bool) -> WorkoutActivityAttributes.ContentState {
-        let elapsed = max(0, Date().timeIntervalSince(session.startDate))
-        return WorkoutActivityAttributes.ContentState(
-            currentBPM: max(0, bpm),
-            elapsedTime: elapsed,
-            isPaused: isPaused
-        )
+    private func liveActivityTimerText(elapsed: TimeInterval) -> String {
+        if isResting, let condition = currentRestCondition {
+            if case .timer = condition {
+                return formatDuration(TimeInterval(max(0, restTimeRemaining)))
+            }
+        }
+
+        return formatDuration(elapsed)
+    }
+
+    private func formatDuration(_ interval: TimeInterval) -> String {
+        let totalSeconds = max(0, Int(interval.rounded(.down)))
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
+
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }

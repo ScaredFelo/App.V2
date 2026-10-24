@@ -3,14 +3,27 @@ import Foundation
 
 public struct WorkoutActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
+        public var exerciseName: String
+        public var currentSet: Int
+        public var totalSets: Int
+        public var timerText: String
+        public var totalSessionTime: String
         public var currentBPM: Int
-        public var elapsedTime: TimeInterval
-        public var isPaused: Bool
 
-        public init(currentBPM: Int, elapsedTime: TimeInterval, isPaused: Bool) {
+        public init(
+            exerciseName: String,
+            currentSet: Int,
+            totalSets: Int,
+            timerText: String,
+            totalSessionTime: String,
+            currentBPM: Int
+        ) {
+            self.exerciseName = exerciseName
+            self.currentSet = currentSet
+            self.totalSets = totalSets
+            self.timerText = timerText
+            self.totalSessionTime = totalSessionTime
             self.currentBPM = currentBPM
-            self.elapsedTime = elapsedTime
-            self.isPaused = isPaused
         }
     }
 

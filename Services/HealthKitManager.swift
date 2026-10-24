@@ -1,9 +1,18 @@
+import ActivityKit
 import Foundation
 import HealthKit
 import Combine
 
 final class HealthKitManager: ObservableObject {
     static let shared = HealthKitManager()
+
+    struct LiveActivitySnapshot {
+        var exerciseName: String
+        var currentSet: Int
+        var totalSets: Int
+        var timerText: String
+        var totalSessionTime: String
+    }
 
     @Published var currentBPM: Int = 0
     @Published private(set) var isAuthorized: Bool = false
@@ -14,6 +23,16 @@ final class HealthKitManager: ObservableObject {
     private let heartRateType = HKObjectType.quantityType(forIdentifier: .heartRate)
     private var heartRateQuery: HKAnchoredObjectQuery?
     private var anchor: HKQueryAnchor?
+
+    private var liveActivitySnapshot = LiveActivitySnapshot(
+        exerciseName: "",
+        currentSet: 0,
+        totalSets: 0,
+        timerText: "0:00",
+        totalSessionTime: "0:00"
+    )
+    private var lastLiveActivityState: WorkoutActivityAttributes.ContentState?
+    private var isWorkoutLiveActivityActive = false
 
     private var bpmUnit: HKUnit {
         HKUnit.count().unitDivided(by: HKUnit.minute())
@@ -92,6 +111,88 @@ final class HealthKitManager: ObservableObject {
         }
     }
 
+    // MARK: - Live Activity
+
+    func startWorkoutLiveActivity(
+        workoutName: String,
+        snapshot: LiveActivitySnapshot,
+        bpm: Int
+    ) {
+        liveActivitySnapshot = snapshot
+        lastLiveActivityState = nil
+        isWorkoutLiveActivityActive = true
+
+        let existingActivities = Activity<WorkoutActivityAttributes>.activities
+        if !existingActivities.isEmpty {
+            Task {
+                for activity in existingActivities {
+                    await activity.end(nil, dismissalPolicy: .immediate)
+                }
+            }
+        }
+
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+
+        let attributes = WorkoutActivityAttributes(workoutName: workoutName)
+        let state = makeLiveActivityState(bpm: bpm)
+
+        do {
+            _ = try Activity<WorkoutActivityAttributes>.request(
+                attributes: attributes,
+                content: ActivityContent(state: state, staleDate: nil),
+                pushType: nil
+            )
+            lastLiveActivityState = state
+        } catch {
+            print("Error iniciando Live Activity: \(error.localizedDescription)")
+        }
+    }
+
+    func updateLiveActivitySnapshot(_ snapshot: LiveActivitySnapshot, bpm: Int? = nil) {
+        liveActivitySnapshot = snapshot
+        pushLiveActivityUpdate(bpm: bpm)
+    }
+
+    func endWorkoutLiveActivity() {
+        let activities = Activity<WorkoutActivityAttributes>.activities
+        lastLiveActivityState = nil
+        isWorkoutLiveActivityActive = false
+        guard !activities.isEmpty else { return }
+
+        Task {
+            for activity in activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+        }
+    }
+
+    private func pushLiveActivityUpdate(bpm: Int? = nil) {
+        guard isWorkoutLiveActivityActive else { return }
+        let activities = Activity<WorkoutActivityAttributes>.activities
+        guard !activities.isEmpty else { return }
+
+        let state = makeLiveActivityState(bpm: bpm ?? currentBPM)
+        if let lastLiveActivityState, lastLiveActivityState == state { return }
+        lastLiveActivityState = state
+
+        Task {
+            for activity in activities {
+                await activity.update(ActivityContent(state: state, staleDate: nil))
+            }
+        }
+    }
+
+    private func makeLiveActivityState(bpm: Int) -> WorkoutActivityAttributes.ContentState {
+        WorkoutActivityAttributes.ContentState(
+            exerciseName: liveActivitySnapshot.exerciseName,
+            currentSet: liveActivitySnapshot.currentSet,
+            totalSets: liveActivitySnapshot.totalSets,
+            timerText: liveActivitySnapshot.timerText,
+            totalSessionTime: liveActivitySnapshot.totalSessionTime,
+            currentBPM: max(0, bpm)
+        )
+    }
+
     // MARK: - Heart Rate Query
 
     func startHeartRateQuery() {
@@ -156,6 +257,7 @@ final class HealthKitManager: ObservableObject {
             self.currentBPM = bpm
             self.dataSourceName = sourceName
             self.debugMessage = "Leyendo pulsaciones de \(sourceName)"
+            self.pushLiveActivityUpdate(bpm: bpm)
         }
     }
 }
