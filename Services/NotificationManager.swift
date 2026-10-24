@@ -4,7 +4,7 @@ import UserNotifications
 final class NotificationManager {
     static let shared = NotificationManager()
 
-    private let restFinishedIdentifier = "com.jordiferres.appgym.rest.finished"
+    private let restFinishedIdentifier = "REST_TIMER_END"
 
     private init() {}
 
@@ -20,18 +20,20 @@ final class NotificationManager {
         }
     }
 
-    func scheduleRestFinishedNotification(after seconds: TimeInterval) {
+    func scheduleRestFinishedNotification(endingAt endDate: Date) {
         cancelRestFinishedNotification()
 
-        guard seconds > 0 else { return }
+        let timeInterval = endDate.timeIntervalSince(Date())
+        guard timeInterval > 0 else { return }
 
         let content = UNMutableNotificationContent()
-        content.title = "Descanso completado"
-        content.body = "Ya puedes empezar la siguiente serie."
-        content.sound = .default
+        content.title = "¡Tiempo de descanso finalizado!"
+        content.body = "Prepara la siguiente serie"
+        content.sound = UNNotificationSound.default
+        content.interruptionLevel = .timeSensitive
 
         let trigger = UNTimeIntervalNotificationTrigger(
-            timeInterval: max(1, seconds),
+            timeInterval: max(1, timeInterval),
             repeats: false
         )
         let request = UNNotificationRequest(
@@ -44,7 +46,7 @@ final class NotificationManager {
             if let error {
                 print("[Notifications] Error programando aviso de descanso: \(error.localizedDescription)")
             } else {
-                print("[Notifications] Aviso de descanso programado en \(Int(seconds))s")
+                print("[Notifications] Aviso de descanso programado en \(Int(timeInterval))s")
             }
         }
     }

@@ -52,12 +52,9 @@ struct WorkoutLiveActivity: Widget {
                 HStack(spacing: 4) {
                     Image(systemName: "stopwatch.fill")
                         .font(.caption2)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(.orange)
 
-                    Text(context.state.timerText)
-                        .font(.caption.bold())
-                        .monospacedDigit()
-                        .foregroundStyle(.white)
+                    timerText(context, font: .caption.bold())
                 }
             }
 
@@ -92,12 +89,9 @@ struct WorkoutLiveActivity: Widget {
             HStack(spacing: 4) {
                 Image(systemName: "stopwatch.fill")
                     .font(.caption2)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(.orange)
 
-                Text(context.state.timerText)
-                    .font(.caption2.bold())
-                    .monospacedDigit()
-                    .foregroundStyle(.white)
+                timerText(context, font: .caption2.bold())
             }
         }
     }
@@ -117,12 +111,9 @@ struct WorkoutLiveActivity: Widget {
     private func compactTimer(_ context: ActivityViewContext<WorkoutActivityAttributes>) -> some View {
         HStack(spacing: 4) {
             Image(systemName: "stopwatch.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(.orange)
 
-            Text(context.state.timerText)
-                .font(.caption2.bold())
-                .monospacedDigit()
-                .foregroundStyle(.white)
+            timerText(context, font: .caption2.bold())
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
         }
@@ -145,14 +136,29 @@ struct WorkoutLiveActivity: Widget {
     private func minimalTimer(_ context: ActivityViewContext<WorkoutActivityAttributes>) -> some View {
         HStack(spacing: 2) {
             Image(systemName: "stopwatch.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(.orange)
 
-            Text(context.state.timerText)
-                .font(.caption2.bold())
-                .monospacedDigit()
-                .foregroundStyle(.white)
+            timerText(context, font: .caption2.bold())
                 .lineLimit(1)
                 .minimumScaleFactor(0.55)
+        }
+    }
+
+    @ViewBuilder
+    private func timerText(
+        _ context: ActivityViewContext<WorkoutActivityAttributes>,
+        font: Font
+    ) -> some View {
+        if let endDate = context.state.timerEndDate, context.state.isRestTimerActive {
+            Text(endDate, style: .timer)
+                .font(font)
+                .monospacedDigit()
+                .foregroundColor(.orange)
+        } else {
+            Text("00:00")
+                .font(font)
+                .monospacedDigit()
+                .foregroundColor(.orange)
         }
     }
 

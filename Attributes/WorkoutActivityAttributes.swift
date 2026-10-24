@@ -6,20 +6,26 @@ public struct WorkoutActivityAttributes: ActivityAttributes {
         public var exerciseName: String
         public var currentSet: Int
         public var totalSets: Int
-        public var timerText: String
+        public var timerStartDate: Date?
+        public var timerEndDate: Date?
+        public var isRestTimerActive: Bool
         public var currentBPM: Int
 
         public init(
             exerciseName: String,
             currentSet: Int,
             totalSets: Int,
-            timerText: String,
+            timerStartDate: Date?,
+            timerEndDate: Date?,
+            isRestTimerActive: Bool,
             currentBPM: Int
         ) {
             self.exerciseName = exerciseName
             self.currentSet = currentSet
             self.totalSets = totalSets
-            self.timerText = timerText
+            self.timerStartDate = timerStartDate
+            self.timerEndDate = timerEndDate
+            self.isRestTimerActive = isRestTimerActive
             self.currentBPM = currentBPM
         }
     }

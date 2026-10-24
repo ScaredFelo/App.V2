@@ -9,7 +9,9 @@ final class LiveActivityManager: ObservableObject {
         var exerciseName: String
         var currentSet: Int
         var totalSets: Int
-        var timerText: String
+        var timerStartDate: Date?
+        var timerEndDate: Date?
+        var isRestTimerActive: Bool
     }
 
     @Published private(set) var debugMessage = "Live Activity pendiente"
@@ -20,7 +22,9 @@ final class LiveActivityManager: ObservableObject {
         exerciseName: "",
         currentSet: 0,
         totalSets: 0,
-        timerText: "0:00"
+        timerStartDate: nil,
+        timerEndDate: nil,
+        isRestTimerActive: false
     )
     private var bpm = 0
     private let staleMargin: TimeInterval = 14_400
@@ -83,7 +87,10 @@ final class LiveActivityManager: ObservableObject {
     }
 
     func setBPM(_ bpm: Int) {
-        self.bpm = max(0, bpm)
+        let value = max(0, bpm)
+        guard value != self.bpm else { return }
+        self.bpm = value
+        updateActivity(state: makeState())
     }
 
     func updateActivity(state: WorkoutActivityAttributes.ContentState) {
@@ -142,7 +149,9 @@ final class LiveActivityManager: ObservableObject {
             exerciseName: snapshot.exerciseName,
             currentSet: snapshot.currentSet,
             totalSets: snapshot.totalSets,
-            timerText: snapshot.timerText,
+            timerStartDate: snapshot.timerStartDate,
+            timerEndDate: snapshot.timerEndDate,
+            isRestTimerActive: snapshot.isRestTimerActive,
             currentBPM: max(0, bpm)
         )
     }
