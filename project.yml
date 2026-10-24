@@ -3,6 +3,9 @@ options:
   bundleIdPrefix: com.jordiferres
   objectVersion: 56
 
+fileGroups:
+  - AppGym/AppGym.entitlements
+
 targets:
   AppGym:
     type: application
@@ -11,6 +14,13 @@ targets:
     bundleId: com.jordiferres.appgym
     entitlements:
       path: AppGym/AppGym.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.background-delivery: true
+    attributes:
+      SystemCapabilities:
+        com.apple.HealthKit:
+          enabled: 1
     sources:
       - path: App.swift
       - path: Models
@@ -44,10 +54,7 @@ targets:
         INFOPLIST_FILE: Info.plist
         SWIFT_VERSION: "5.0"
         SWIFT_STRICT_CONCURRENCY: "minimal"
-        CODE_SIGNING_REQUIRED: "NO"
-        CODE_SIGN_IDENTITY: ""
-        CODE_SIGNING_ALLOWED: "NO"
-        GENERATE_INFOPLIST_FILE: "YES"
+        GENERATE_INFOPLIST_FILE: "NO"
       configs:
         Debug:
           CODE_SIGN_ENTITLEMENTS: AppGym/AppGym.entitlements
@@ -81,7 +88,4 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.0"
         SWIFT_STRICT_CONCURRENCY: "minimal"
-        CODE_SIGNING_REQUIRED: "NO"
-        CODE_SIGN_IDENTITY: ""
-        CODE_SIGNING_ALLOWED: "NO"
-        GENERATE_INFOPLIST_FILE: "YES"
+        GENERATE_INFOPLIST_FILE: "NO"
