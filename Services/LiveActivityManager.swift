@@ -105,6 +105,11 @@ final class LiveActivityManager: ObservableObject {
             return
         }
 
+        if state.isRestTimerActive, state.timerEndDate == nil {
+            debugMessage = "Actualización ignorada: temporizador activo sin fecha de fin"
+            return
+        }
+
         if let lastState, lastState == state {
             return
         }

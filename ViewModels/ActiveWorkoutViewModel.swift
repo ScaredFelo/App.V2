@@ -15,6 +15,8 @@ public final class ActiveWorkoutViewModel {
     public var isRestPaused = false
     public var restTimeRemaining = 0
     public var totalRestSeconds = 0
+    public var restTimerEndDate: Date? = nil
+    public var isRestTimerActive: Bool = false
     public var restTargetBpm: Int?
     public var currentRestModeTitle = ""
     public var currentExerciseName = ""
@@ -313,10 +315,13 @@ public final class ActiveWorkoutViewModel {
 
         switch condition {
         case .timer(let seconds):
+            let startDate = Date()
             totalRestSeconds = seconds
             restTimeRemaining = seconds
-            timerStartDate = Date()
+            timerStartDate = startDate
             timerTargetDuration = seconds
+            restTimerEndDate = startDate.addingTimeInterval(Double(seconds))
+            isRestTimerActive = true
             currentRestModeTitle = "Descanso (\(seconds)s)"
             if let endDate = restTimerEndDate {
                 NotificationManager.shared.scheduleRestFinishedNotification(endingAt: endDate)
@@ -329,6 +334,8 @@ public final class ActiveWorkoutViewModel {
             currentRestModeTitle = "Esperando recuperación (< \(targetBpm) BPM)"
             timerStartDate = nil
             timerTargetDuration = 0
+            restTimerEndDate = nil
+            isRestTimerActive = false
             startBpmRecoveryObserver(targetBpm: targetBpm)
         }
 
@@ -339,10 +346,19 @@ public final class ActiveWorkoutViewModel {
         timerTask?.cancel()
         timerTask = Task { [weak self] in
             while !Task.isCancelled {
-                guard let self, !self.isRestPaused, let startDate = self.timerStartDate else { return }
-                let elapsed = Date().timeIntervalSince(startDate)
-                let remaining = Int(ceil(Double(self.timerTargetDuration) - elapsed))
-                self.restTimeRemaining = max(0, remaining)
+                guard let self, !self.isRestPaused else { return }
+
+                let remaining: Int
+                if let endDate = self.restTimerEndDate {
+                    remaining = max(0, Int(ceil(endDate.timeIntervalSinceNow)))
+                } else if let startDate = self.timerStartDate {
+                    let elapsed = Date().timeIntervalSince(startDate)
+                    remaining = max(0, Int(ceil(Double(self.timerTargetDuration) - elapsed)))
+                } else {
+                    return
+                }
+
+                self.restTimeRemaining = remaining
 
                 if remaining <= 0 {
                     self.finishRest()
@@ -378,9 +394,11 @@ public final class ActiveWorkoutViewModel {
             restTimeRemaining += 10
             totalRestSeconds += 10
             timerTargetDuration = restTimeRemaining
-        } else if timerStartDate != nil {
+        } else if let startDate = timerStartDate {
             timerTargetDuration += 10
             totalRestSeconds += 10
+            restTimerEndDate = startDate.addingTimeInterval(Double(timerTargetDuration))
+            isRestTimerActive = true
             updateRestRemainingFromClock()
             if let endDate = restTimerEndDate {
                 NotificationManager.shared.scheduleRestFinishedNotification(endingAt: endDate)
@@ -413,6 +431,8 @@ public final class ActiveWorkoutViewModel {
                 timerTargetDuration = newTarget
                 totalRestSeconds = max(10, totalRestSeconds - 10)
                 restTimeRemaining = remaining
+                restTimerEndDate = startDate.addingTimeInterval(Double(newTarget))
+                isRestTimerActive = true
                 if let endDate = restTimerEndDate {
                     NotificationManager.shared.scheduleRestFinishedNotification(endingAt: endDate)
                 }
@@ -440,6 +460,8 @@ public final class ActiveWorkoutViewModel {
             timerTargetDuration = restTimeRemaining
         }
 
+        restTimerEndDate = nil
+        isRestTimerActive = false
         refreshLiveActivity()
     }
 
@@ -454,8 +476,11 @@ public final class ActiveWorkoutViewModel {
                 finishRest()
                 return
             }
-            timerStartDate = Date()
+            let startDate = Date()
+            timerStartDate = startDate
             timerTargetDuration = restTimeRemaining
+            restTimerEndDate = startDate.addingTimeInterval(Double(timerTargetDuration))
+            isRestTimerActive = true
             if let endDate = restTimerEndDate {
                 NotificationManager.shared.scheduleRestFinishedNotification(endingAt: endDate)
             }
@@ -470,9 +495,27 @@ public final class ActiveWorkoutViewModel {
     }
 
     private func updateRestRemainingFromClock() {
+        if let endDate = restTimerEndDate {
+            restTimeRemaining = max(0, Int(ceil(endDate.timeIntervalSinceNow)))
+            return
+        }
+
         guard let startDate = timerStartDate else { return }
         let elapsed = Date().timeIntervalSince(startDate)
         restTimeRemaining = max(0, Int(ceil(Double(timerTargetDuration) - elapsed)))
+    }
+
+    public func resumeRestRendering(remaining: TimeInterval) {
+        guard isResting, !isRestPaused, restTimerEndDate != nil else { return }
+        restTimeRemaining = max(0, Int(ceil(remaining)))
+        startTimerCountdown()
+        refreshLiveActivity()
+    }
+
+    public func finishRestOnForeground() {
+        guard isResting, !isRestFinishing else { return }
+        restTimeRemaining = 0
+        finishRest()
     }
 
     public func skipRest() {
@@ -489,7 +532,10 @@ public final class ActiveWorkoutViewModel {
     private func beginRestDismissal() {
         restDismissalTask?.cancel()
         isRestFinishing = true
+        restTimerEndDate = nil
+        isRestTimerActive = false
         NotificationManager.shared.cancelRestFinishedNotification()
+        refreshLiveActivity()
 
         restDismissalTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 260_000_000)
@@ -518,6 +564,8 @@ public final class ActiveWorkoutViewModel {
         restTargetBpm = nil
         timerStartDate = nil
         timerTargetDuration = 0
+        restTimerEndDate = nil
+        isRestTimerActive = false
         currentRestCondition = nil
     }
 
@@ -583,22 +631,10 @@ public final class ActiveWorkoutViewModel {
 
     // MARK: - Live Activity
 
-    private var restTimerEndDate: Date? {
-        guard isResting,
-              !isRestPaused,
-              let condition = currentRestCondition,
-              case .timer = condition,
-              let startDate = timerStartDate else {
-            return nil
-        }
-
-        return startDate.addingTimeInterval(Double(timerTargetDuration))
-    }
-
     private func makeLiveActivitySnapshot() -> LiveActivityManager.Snapshot {
         let info = currentExerciseInfo()
-        let endDate = restTimerEndDate
-        let isActive = endDate != nil
+        let endDate = isRestTimerActive ? restTimerEndDate : nil
+        let isActive = isRestTimerActive && endDate != nil
 
         return LiveActivityManager.Snapshot(
             exerciseName: info.name,

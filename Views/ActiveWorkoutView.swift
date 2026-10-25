@@ -5,6 +5,7 @@ import SwiftData
 public struct ActiveWorkoutView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     @ObservedObject private var healthKitManager = HealthKitManager.shared
     @ObservedObject private var liveActivityManager = LiveActivityManager.shared
@@ -135,22 +136,24 @@ public struct ActiveWorkoutView: View {
 
                     VStack {
                         Spacer()
-                        CircularTimerView(
-                            timeRemaining: viewModel.restTimeRemaining,
-                            totalSeconds: viewModel.totalRestSeconds,
-                            isPaused: viewModel.isRestPaused,
-                            onAdd10: { viewModel.add10Seconds() },
-                            onSub10: { viewModel.sub10Seconds() },
-                            onTogglePause: {
-                                if viewModel.isRestPaused {
-                                    viewModel.resumeRest()
-                                } else {
-                                    viewModel.pauseRest()
-                                }
-                            },
-                            onSkip: { skipRest() },
-                            onMinimize: { minimizeTimer() }
-                        )
+                        TimelineView(.periodic(from: .now, by: 1.0)) { timeline in
+                            CircularTimerView(
+                                timeRemaining: displayedRestTime(at: timeline.date),
+                                totalSeconds: viewModel.totalRestSeconds,
+                                isPaused: viewModel.isRestPaused,
+                                onAdd10: { viewModel.add10Seconds() },
+                                onSub10: { viewModel.sub10Seconds() },
+                                onTogglePause: {
+                                    if viewModel.isRestPaused {
+                                        viewModel.resumeRest()
+                                    } else {
+                                        viewModel.pauseRest()
+                                    }
+                                },
+                                onSkip: { skipRest() },
+                                onMinimize: { minimizeTimer() }
+                            )
+                        }
                         .matchedGeometryEffect(id: timerIsLaunching ? "timerContainer-inactive" : "timerContainer", in: timerAnimation, isSource: false)
                         .scaleEffect(viewModel.isRestFinishing ? 1.05 : 1)
                         .opacity(viewModel.isRestFinishing ? 0 : 1)
@@ -167,22 +170,24 @@ public struct ActiveWorkoutView: View {
 
             // Temporizador minimizado flotando sobre la lista
             if viewModel.isResting && viewModel.isTimerMinimized {
-                MinimizedTimerView(
-                    timeRemaining: viewModel.restTimeRemaining,
-                    totalSeconds: viewModel.totalRestSeconds,
-                    isPaused: viewModel.isRestPaused,
-                    onExpand: { expandTimer() },
-                    onTogglePause: {
-                        if viewModel.isRestPaused {
-                            viewModel.resumeRest()
-                        } else {
-                            viewModel.pauseRest()
-                        }
-                    },
-                    onAdd10: { viewModel.add10Seconds() },
-                    onSub10: { viewModel.sub10Seconds() },
-                    onSkip: { skipRest() }
-                )
+                TimelineView(.periodic(from: .now, by: 1.0)) { timeline in
+                    MinimizedTimerView(
+                        timeRemaining: displayedRestTime(at: timeline.date),
+                        totalSeconds: viewModel.totalRestSeconds,
+                        isPaused: viewModel.isRestPaused,
+                        onExpand: { expandTimer() },
+                        onTogglePause: {
+                            if viewModel.isRestPaused {
+                                viewModel.resumeRest()
+                            } else {
+                                viewModel.pauseRest()
+                            }
+                        },
+                        onAdd10: { viewModel.add10Seconds() },
+                        onSub10: { viewModel.sub10Seconds() },
+                        onSkip: { skipRest() }
+                    )
+                }
                 .matchedGeometryEffect(id: "timerContainer", in: timerAnimation, isSource: true)
                 .padding(.horizontal, horizontalPadding)
                 .frame(width: geometry.size.width)
@@ -204,6 +209,17 @@ public struct ActiveWorkoutView: View {
         }
         .onDisappear {
             pendingNewRoutinePromptID = nil
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            guard let endDate = viewModel.restTimerEndDate else { return }
+
+            let remaining = max(0, endDate.timeIntervalSinceNow)
+            if remaining > 0 {
+                viewModel.resumeRestRendering(remaining: remaining)
+            } else {
+                viewModel.finishRestOnForeground()
+            }
         }
         .navigationBarHidden(true)
         .interactiveDismissDisabled(true)
@@ -349,6 +365,18 @@ public struct ActiveWorkoutView: View {
         withAnimation(.easeIn(duration: 0.22)) {
             viewModel.skipRest()
         }
+    }
+
+    private func displayedRestTime(at date: Date) -> Int {
+        if viewModel.isRestPaused {
+            return viewModel.restTimeRemaining
+        }
+
+        guard let endDate = viewModel.restTimerEndDate else {
+            return viewModel.restTimeRemaining
+        }
+
+        return max(0, Int(ceil(endDate.timeIntervalSince(date))))
     }
 
     private var healthKitDiagnosticBanner: some View {
