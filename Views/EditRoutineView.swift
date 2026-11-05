@@ -111,9 +111,14 @@ struct EditRoutineView: View {
                 .accessibilityLabel("Ajustar ejercicio")
 
                 Button("Guardar") {
-                    if isNewRoutine && routine.modelContext == nil {
+                    for routineExercise in routine.exercises where routineExercise.modelContext == nil {
+                        modelContext.insert(routineExercise)
+                    }
+
+                    if routine.modelContext == nil {
                         modelContext.insert(routine)
                     }
+
                     try? modelContext.save()
                     dismiss()
                 }

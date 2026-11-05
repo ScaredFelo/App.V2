@@ -18,6 +18,7 @@ final class LiveActivityManager: ObservableObject {
 
     private var currentActivity: Activity<WorkoutActivityAttributes>?
     private var lastState: WorkoutActivityAttributes.ContentState?
+    private var pendingUpdateTask: Task<Void, Never>?
     private var snapshot = Snapshot(
         exerciseName: "",
         currentSet: 0,
@@ -28,6 +29,7 @@ final class LiveActivityManager: ObservableObject {
     )
     private var bpm = 0
     private let staleMargin: TimeInterval = 14_400
+    private let updateCoalescingDelay: UInt64 = 150_000_000
 
     private init() {}
 
@@ -35,27 +37,33 @@ final class LiveActivityManager: ObservableObject {
         self.snapshot = snapshot
         self.bpm = max(0, bpm)
 
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            currentActivity = nil
+            lastState = nil
+            pendingUpdateTask?.cancel()
+            pendingUpdateTask = nil
+            debugMessage = "Live Activities desactivadas en Ajustes de iOS"
+            print("[LiveActivity] Desactivadas en Ajustes de iOS")
+            return
+        }
+
         if let activity = currentActivity, isUsable(activity) {
             debugMessage = "Live Activity ya activa; datos actualizados"
             updateActivity(state: makeState())
             return
         }
 
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            currentActivity = nil
+        if let existingActivity = Activity<WorkoutActivityAttributes>.activities.first(where: { isUsable($0) }) {
+            currentActivity = existingActivity
             lastState = nil
-            debugMessage = "Live Activities desactivadas en Ajustes de iOS"
-            print("[LiveActivity] Desactivadas en Ajustes de iOS")
+            debugMessage = "Live Activity existente reutilizada"
+            updateActivity(state: makeState())
             return
         }
 
         do {
-            if let previousActivity = currentActivity {
-                Task { await previousActivity.end(nil, dismissalPolicy: .immediate) }
-                currentActivity = nil
-                lastState = nil
-            }
-
+            currentActivity = nil
+            lastState = nil
             endOrphanedActivities()
 
             let attributes = WorkoutActivityAttributes(workoutName: workoutName)
@@ -101,6 +109,8 @@ final class LiveActivityManager: ObservableObject {
         guard isUsable(activity) else {
             currentActivity = nil
             lastState = nil
+            pendingUpdateTask?.cancel()
+            pendingUpdateTask = nil
             debugMessage = "Live Activity finalizada por el sistema"
             return
         }
@@ -110,17 +120,25 @@ final class LiveActivityManager: ObservableObject {
             return
         }
 
-        if let lastState, lastState == state {
-            return
-        }
+        guard lastState != state else { return }
         lastState = state
 
-        Task {
-            await activity.update(makeContent(for: state))
+        pendingUpdateTask?.cancel()
+
+        let content = makeContent(for: state)
+        let delay = updateCoalescingDelay
+        pendingUpdateTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: delay)
+            guard !Task.isCancelled else { return }
+            guard self?.isUsable(activity) ?? false else { return }
+            await activity.update(content)
         }
     }
 
     func endActivity() {
+        pendingUpdateTask?.cancel()
+        pendingUpdateTask = nil
+
         guard let activity = currentActivity else {
             lastState = nil
             return

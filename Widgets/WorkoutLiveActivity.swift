@@ -154,11 +154,15 @@ struct WorkoutLiveActivity: Widget {
                 .font(font)
                 .monospacedDigit()
                 .foregroundColor(.orange)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
         } else {
             Text("00:00")
                 .font(font)
                 .monospacedDigit()
                 .foregroundColor(.orange)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
         }
     }
 

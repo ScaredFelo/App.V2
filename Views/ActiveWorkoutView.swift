@@ -60,11 +60,13 @@ public struct ActiveWorkoutView: View {
                                     toggleSet(for: routineExercise, setIndex: setIndex)
                                 },
                                 onUpdateSet: { setIndex, weight, reps in
-                                    if var sets = viewModel.activeSets[routineExercise.id], sets.indices.contains(setIndex) {
-                                        sets[setIndex].weight = weight
-                                        sets[setIndex].reps = reps
-                                        viewModel.activeSets[routineExercise.id] = sets
-                                    }
+                                    viewModel.updateSetValues(
+                                        for: routineExercise.id,
+                                        setIndex: setIndex,
+                                        weight: weight,
+                                        reps: reps,
+                                        modelContext: modelContext
+                                    )
                                 },
                                 onRemove: {
                                     exercisePendingRemoval = routineExercise
@@ -209,16 +211,20 @@ public struct ActiveWorkoutView: View {
         }
         .onDisappear {
             pendingNewRoutinePromptID = nil
+            try? modelContext.save()
+            BPMManager.shared.stopScanning()
+            HealthKitManager.shared.stopHeartRateQuery()
         }
         .onChange(of: scenePhase) { _, newPhase in
-            guard newPhase == .active else { return }
-            guard let endDate = viewModel.restTimerEndDate else { return }
-
-            let remaining = max(0, endDate.timeIntervalSinceNow)
-            if remaining > 0 {
-                viewModel.resumeRestRendering(remaining: remaining)
-            } else {
-                viewModel.finishRestOnForeground()
+            switch newPhase {
+            case .active:
+                viewModel.handleScenePhaseActive()
+            case .inactive:
+                try? modelContext.save()
+            case .background:
+                viewModel.handleScenePhaseBackground(modelContext: modelContext)
+            @unknown default:
+                break
             }
         }
         .navigationBarHidden(true)

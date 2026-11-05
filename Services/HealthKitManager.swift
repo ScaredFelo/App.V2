@@ -129,9 +129,16 @@ final class HealthKitManager: ObservableObject {
     }
 
     func stopHeartRateQuery() {
-        guard let query = heartRateQuery else { return }
-        healthStore.stop(query)
-        heartRateQuery = nil
+        if let query = heartRateQuery {
+            healthStore.stop(query)
+            heartRateQuery = nil
+        }
+
+        if let heartRateType {
+            healthStore.disableBackgroundDelivery(for: heartRateType) { _, _ in }
+        }
+
+        anchor = nil
     }
 
     private func handleHeartRateSamples(_ samples: [HKSample]?, newAnchor: HKQueryAnchor?, error: Error?) {
@@ -140,19 +147,21 @@ final class HealthKitManager: ObservableObject {
             return
         }
 
-        anchor = newAnchor
-        guard let quantitySamples = samples as? [HKQuantitySample],
-              let latestSample = quantitySamples.max(by: { $0.endDate < $1.endDate }) else {
-            return
+        let latestSample = (samples as? [HKQuantitySample])?
+            .max(by: { $0.endDate < $1.endDate })
+
+        let bpm = latestSample.map {
+            Int($0.quantity.doubleValue(for: bpmUnit).rounded())
         }
-
-        let bpm = Int(latestSample.quantity.doubleValue(for: bpmUnit).rounded())
-        guard bpm > 0 else { return }
-
-        let sourceName = latestSample.sourceRevision.source.name
+        let sourceName = latestSample?.sourceRevision.source.name
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+
+            self.anchor = newAnchor
+
+            guard let bpm, bpm > 0, let sourceName else { return }
+
             self.currentBPM = bpm
             self.dataSourceName = sourceName
             self.debugMessage = "Leyendo pulsaciones de \(sourceName)"

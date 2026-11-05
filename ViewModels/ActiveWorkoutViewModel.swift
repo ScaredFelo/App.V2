@@ -303,6 +303,66 @@ public final class ActiveWorkoutViewModel {
         refreshLiveActivity()
     }
 
+    public func updateSetValues(
+        for routineExerciseID: UUID,
+        setIndex: Int,
+        weight: Double,
+        reps: Int,
+        modelContext: ModelContext
+    ) {
+        guard var sets = activeSets[routineExerciseID], sets.indices.contains(setIndex) else { return }
+
+        let sanitizedWeight = max(0, weight)
+        let sanitizedReps = max(0, reps)
+
+        guard sets[setIndex].weight != sanitizedWeight || sets[setIndex].reps != sanitizedReps else {
+            return
+        }
+
+        sets[setIndex].weight = sanitizedWeight
+        sets[setIndex].reps = sanitizedReps
+
+        if sets[setIndex].isCompleted, let log = sets[setIndex].existingLog {
+            let previousVolume = log.weight * Double(log.reps)
+            let newVolume = sanitizedWeight * Double(sanitizedReps)
+
+            log.weight = sanitizedWeight
+            log.reps = sanitizedReps
+            session.totalVolumeKg = max(0, session.totalVolumeKg - previousVolume + newVolume)
+            try? modelContext.save()
+        }
+
+        activeSets[routineExerciseID] = sets
+    }
+
+    // MARK: - Scene Phase
+
+    public func handleScenePhaseBackground(modelContext: ModelContext) {
+        try? modelContext.save()
+
+        guard isResting, !isRestPaused else { return }
+        updateRestRemainingFromClock()
+    }
+
+    public func handleScenePhaseActive() {
+        guard isResting, !isRestPaused, !isRestFinishing else { return }
+
+        if isRestTimerActive, let endDate = restTimerEndDate {
+            let remaining = endDate.timeIntervalSinceNow
+            if remaining > 0 {
+                resumeRestRendering(remaining: remaining)
+            } else {
+                restTimeRemaining = 0
+                finishRestOnForeground()
+            }
+            return
+        }
+
+        if let condition = currentRestCondition, case .bpmDrop(let targetBpm) = condition {
+            startBpmRecoveryObserver(targetBpm: targetBpm)
+        }
+    }
+
     // MARK: - Rest Timer & BPM Drop Logic
 
     private func startRest(with condition: RestCondition, exerciseName: String) {
