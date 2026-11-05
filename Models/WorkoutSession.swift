@@ -32,7 +32,8 @@ public final class WorkoutSetLog {
     public var date: Date
     public var weight: Double
     public var reps: Int
-    public var targetReps: Int = 10
+    public var targetRepsMin: Int = 8
+    public var targetRepsMax: Int = 12
     public var isCompleted: Bool
     public var routineExerciseID: UUID?
     public var setNumber: Int?
@@ -45,7 +46,8 @@ public final class WorkoutSetLog {
         date: Date = Date(),
         weight: Double = 0.0,
         reps: Int = 0,
-        targetReps: Int = 10,
+        targetRepsMin: Int = 8,
+        targetRepsMax: Int = 12,
         isCompleted: Bool = false,
         routineExerciseID: UUID? = nil,
         setNumber: Int? = nil,
@@ -56,7 +58,8 @@ public final class WorkoutSetLog {
         self.date = date
         self.weight = weight
         self.reps = reps
-        self.targetReps = targetReps
+        self.targetRepsMin = targetRepsMin
+        self.targetRepsMax = targetRepsMax
         self.isCompleted = isCompleted
         self.routineExerciseID = routineExerciseID
         self.setNumber = setNumber

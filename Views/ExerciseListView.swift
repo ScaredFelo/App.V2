@@ -154,7 +154,8 @@ public struct AddExerciseView: View {
     @State private var equipmentType: EquipmentType = .mancuernas
     @State private var weightType: WeightType = .mancuernas
     @State private var requiresStraps = false
-    @State private var targetReps = 10
+    @State private var targetRepsMin = 8
+    @State private var targetRepsMax = 12
     @State private var restSeconds = 90
     @State private var useBpmDrop = false
     @State private var targetBpm = 110
@@ -179,7 +180,22 @@ public struct AddExerciseView: View {
                             Text(eq.rawValue).tag(eq)
                         }
                     }
-                    Stepper("Reps objetivo: \(targetReps)", value: $targetReps, in: 1...50)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Reps objetivo: \(targetRepsMin) - \(targetRepsMax) reps")
+                            .font(.subheadline.bold())
+                        Stepper("Mínimo: \(targetRepsMin)", value: $targetRepsMin, in: 1...50)
+                            .onChange(of: targetRepsMin) { _, newValue in
+                                if newValue > targetRepsMax {
+                                    targetRepsMax = newValue
+                                }
+                            }
+                        Stepper("Máximo: \(targetRepsMax)", value: $targetRepsMax, in: 1...50)
+                            .onChange(of: targetRepsMax) { _, newValue in
+                                if newValue < targetRepsMin {
+                                    targetRepsMin = newValue
+                                }
+                            }
+                    }
                     Toggle("Requiere Straps", isOn: $requiresStraps)
                 }
 
@@ -207,7 +223,8 @@ public struct AddExerciseView: View {
                             equipmentType: equipmentType,
                             weightType: weightType,
                             requiresStraps: requiresStraps,
-                            targetReps: targetReps,
+                            targetRepsMin: targetRepsMin,
+                            targetRepsMax: targetRepsMax,
                             defaultRestCondition: restCondition
                         )
                         modelContext.insert(newExercise)

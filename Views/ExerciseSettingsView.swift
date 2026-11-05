@@ -33,7 +33,22 @@ struct ExerciseSettingsView: View {
                         }
                     }
 
-                    Stepper("Reps objetivo: \(exercise.targetReps)", value: $exercise.targetReps, in: 1...50)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Reps objetivo: \(exercise.targetRepsText) reps")
+                            .font(.subheadline.bold())
+                        Stepper("Mínimo: \(exercise.targetRepsMin)", value: $exercise.targetRepsMin, in: 1...50)
+                            .onChange(of: exercise.targetRepsMin) { _, newValue in
+                                if newValue > exercise.targetRepsMax {
+                                    exercise.targetRepsMax = newValue
+                                }
+                            }
+                        Stepper("Máximo: \(exercise.targetRepsMax)", value: $exercise.targetRepsMax, in: 1...50)
+                            .onChange(of: exercise.targetRepsMax) { _, newValue in
+                                if newValue < exercise.targetRepsMin {
+                                    exercise.targetRepsMin = newValue
+                                }
+                            }
+                    }
 
                     Toggle("Requiere Straps", isOn: $exercise.requiresStraps)
                 }

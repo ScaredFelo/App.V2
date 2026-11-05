@@ -25,6 +25,13 @@ public struct MainTabView: View {
             .tabItem {
                 Label("Progreso", systemImage: "chart.line.uptrend.xyaxis")
             }
+
+            NavigationStack {
+                SettingsView()
+            }
+            .tabItem {
+                Label("Configuración", systemImage: "gearshape.fill")
+            }
         }
         .tint(.accentColor)
         .onAppear {

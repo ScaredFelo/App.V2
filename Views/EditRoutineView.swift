@@ -131,7 +131,8 @@ struct EditRoutineView: View {
                 let nextOrder = (routine.exercises.map(\.sortOrder).max() ?? -1) + 1
                 let routineExercise = RoutineExercise(
                     exercise: exercise,
-                    targetReps: exercise.targetReps,
+                    targetRepsMin: exercise.targetRepsMin,
+                    targetRepsMax: exercise.targetRepsMax,
                     sortOrder: nextOrder
                 )
                 if !isNewRoutine {
@@ -243,7 +244,23 @@ private struct RoutineExerciseEditorRow: View {
             }
 
             Stepper("Series: \(routineExercise.defaultSets)", value: $routineExercise.defaultSets, in: 1...12)
-            Stepper("Reps objetivo: \(routineExercise.targetReps)", value: $routineExercise.targetReps, in: 1...50)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Reps objetivo: \(routineExercise.targetRepsText) reps")
+                    .font(.subheadline.bold())
+                Stepper("Mínimo: \(routineExercise.targetRepsMin)", value: $routineExercise.targetRepsMin, in: 1...50)
+                    .onChange(of: routineExercise.targetRepsMin) { _, newValue in
+                        if newValue > routineExercise.targetRepsMax {
+                            routineExercise.targetRepsMax = newValue
+                        }
+                    }
+                Stepper("Máximo: \(routineExercise.targetRepsMax)", value: $routineExercise.targetRepsMax, in: 1...50)
+                    .onChange(of: routineExercise.targetRepsMax) { _, newValue in
+                        if newValue < routineExercise.targetRepsMin {
+                            routineExercise.targetRepsMin = newValue
+                        }
+                    }
+            }
 
             HStack {
                 Text("Peso por defecto")

@@ -54,12 +54,12 @@ public final class MockDataGenerator {
                 name: "PUSH",
                 isTemplate: true,
                 exercises: [
-                    RoutineExercise(exercise: push1, defaultSets: 3, targetReps: 8, sortOrder: 0),
-                    RoutineExercise(exercise: push2, defaultSets: 3, targetReps: 10, sortOrder: 1),
-                    RoutineExercise(exercise: push3, defaultSets: 3, targetReps: 9, sortOrder: 2),
-                    RoutineExercise(exercise: push4, defaultSets: 2, targetReps: 10, sortOrder: 3),
-                    RoutineExercise(exercise: push5, defaultSets: 2, targetReps: 8, sortOrder: 4),
-                    RoutineExercise(exercise: push6, defaultSets: 2, targetReps: 10, sortOrder: 5)
+                    RoutineExercise(exercise: push1, defaultSets: 3, targetRepsMin: 6, targetRepsMax: 8, sortOrder: 0),
+                    RoutineExercise(exercise: push2, defaultSets: 3, targetRepsMin: 8, targetRepsMax: 12, sortOrder: 1),
+                    RoutineExercise(exercise: push3, defaultSets: 3, targetRepsMin: 8, targetRepsMax: 10, sortOrder: 2),
+                    RoutineExercise(exercise: push4, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 12, sortOrder: 3),
+                    RoutineExercise(exercise: push5, defaultSets: 2, targetRepsMin: 6, targetRepsMax: 8, sortOrder: 4),
+                    RoutineExercise(exercise: push6, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 12, sortOrder: 5)
                 ]
             )
             context.insert(pushRoutine)
@@ -83,12 +83,12 @@ public final class MockDataGenerator {
                 name: "PULL",
                 isTemplate: true,
                 exercises: [
-                    RoutineExercise(exercise: pull1, defaultSets: 3, targetReps: 8, sortOrder: 0),
-                    RoutineExercise(exercise: pull2, defaultSets: 3, targetReps: 10, sortOrder: 1),
-                    RoutineExercise(exercise: pull3, defaultSets: 2, targetReps: 9, sortOrder: 2),
-                    RoutineExercise(exercise: pull4, defaultSets: 2, targetReps: 10, sortOrder: 3),
-                    RoutineExercise(exercise: pull5, defaultSets: 2, targetReps: 9, sortOrder: 4),
-                    RoutineExercise(exercise: pull6, defaultSets: 3, targetReps: 10, sortOrder: 5)
+                    RoutineExercise(exercise: pull1, defaultSets: 3, targetRepsMin: 6, targetRepsMax: 8, sortOrder: 0),
+                    RoutineExercise(exercise: pull2, defaultSets: 3, targetRepsMin: 8, targetRepsMax: 12, sortOrder: 1),
+                    RoutineExercise(exercise: pull3, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 10, sortOrder: 2),
+                    RoutineExercise(exercise: pull4, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 12, sortOrder: 3),
+                    RoutineExercise(exercise: pull5, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 10, sortOrder: 4),
+                    RoutineExercise(exercise: pull6, defaultSets: 3, targetRepsMin: 8, targetRepsMax: 12, sortOrder: 5)
                 ]
             )
             context.insert(pullRoutine)
@@ -112,12 +112,12 @@ public final class MockDataGenerator {
                 name: "LEGS",
                 isTemplate: true,
                 exercises: [
-                    RoutineExercise(exercise: leg1, defaultSets: 2, targetReps: 10, sortOrder: 0),
-                    RoutineExercise(exercise: leg2, defaultSets: 3, targetReps: 8, sortOrder: 1),
-                    RoutineExercise(exercise: leg3, defaultSets: 2, targetReps: 9, sortOrder: 2),
-                    RoutineExercise(exercise: leg4, defaultSets: 2, targetReps: 10, sortOrder: 3),
-                    RoutineExercise(exercise: leg5, defaultSets: 2, targetReps: 8, sortOrder: 4),
-                    RoutineExercise(exercise: leg6, defaultSets: 2, targetReps: 10, sortOrder: 5)
+                    RoutineExercise(exercise: leg1, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 12, sortOrder: 0),
+                    RoutineExercise(exercise: leg2, defaultSets: 3, targetRepsMin: 6, targetRepsMax: 8, sortOrder: 1),
+                    RoutineExercise(exercise: leg3, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 10, sortOrder: 2),
+                    RoutineExercise(exercise: leg4, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 12, sortOrder: 3),
+                    RoutineExercise(exercise: leg5, defaultSets: 2, targetRepsMin: 6, targetRepsMax: 8, sortOrder: 4),
+                    RoutineExercise(exercise: leg6, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 12, sortOrder: 5)
                 ]
             )
             context.insert(legsRoutine)
@@ -127,14 +127,14 @@ public final class MockDataGenerator {
                 name: "UPPER",
                 isTemplate: true,
                 exercises: [
-                    RoutineExercise(exercise: push1, defaultSets: 3, targetReps: 8, sortOrder: 0),
-                    RoutineExercise(exercise: push4, defaultSets: 2, targetReps: 10, sortOrder: 1),
-                    RoutineExercise(exercise: pull1, defaultSets: 3, targetReps: 8, sortOrder: 2),
-                    RoutineExercise(exercise: push2, defaultSets: 2, targetReps: 10, sortOrder: 3),
-                    RoutineExercise(exercise: pull5, defaultSets: 2, targetReps: 9, sortOrder: 4),
-                    RoutineExercise(exercise: push6, defaultSets: 2, targetReps: 10, sortOrder: 5),
-                    RoutineExercise(exercise: pull2, defaultSets: 2, targetReps: 10, sortOrder: 6),
-                    RoutineExercise(exercise: pull6, defaultSets: 2, targetReps: 10, sortOrder: 7)
+                    RoutineExercise(exercise: push1, defaultSets: 3, targetRepsMin: 6, targetRepsMax: 8, sortOrder: 0),
+                    RoutineExercise(exercise: push4, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 12, sortOrder: 1),
+                    RoutineExercise(exercise: pull1, defaultSets: 3, targetRepsMin: 6, targetRepsMax: 8, sortOrder: 2),
+                    RoutineExercise(exercise: push2, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 12, sortOrder: 3),
+                    RoutineExercise(exercise: pull5, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 10, sortOrder: 4),
+                    RoutineExercise(exercise: push6, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 12, sortOrder: 5),
+                    RoutineExercise(exercise: pull2, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 12, sortOrder: 6),
+                    RoutineExercise(exercise: pull6, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 12, sortOrder: 7)
                 ]
             )
             context.insert(upperRoutine)
@@ -148,12 +148,12 @@ public final class MockDataGenerator {
                 name: "LOWER",
                 isTemplate: true,
                 exercises: [
-                    RoutineExercise(exercise: leg1, defaultSets: 2, targetReps: 10, sortOrder: 0),
-                    RoutineExercise(exercise: leg7, defaultSets: 3, targetReps: 8, sortOrder: 1),
-                    RoutineExercise(exercise: leg3, defaultSets: 2, targetReps: 9, sortOrder: 2),
-                    RoutineExercise(exercise: leg4, defaultSets: 2, targetReps: 10, sortOrder: 3),
-                    RoutineExercise(exercise: leg5, defaultSets: 2, targetReps: 8, sortOrder: 4),
-                    RoutineExercise(exercise: leg6, defaultSets: 2, targetReps: 10, sortOrder: 5)
+                    RoutineExercise(exercise: leg1, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 12, sortOrder: 0),
+                    RoutineExercise(exercise: leg7, defaultSets: 3, targetRepsMin: 6, targetRepsMax: 8, sortOrder: 1),
+                    RoutineExercise(exercise: leg3, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 10, sortOrder: 2),
+                    RoutineExercise(exercise: leg4, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 12, sortOrder: 3),
+                    RoutineExercise(exercise: leg5, defaultSets: 2, targetRepsMin: 6, targetRepsMax: 8, sortOrder: 4),
+                    RoutineExercise(exercise: leg6, defaultSets: 2, targetRepsMin: 8, targetRepsMax: 12, sortOrder: 5)
                 ]
             )
             context.insert(lowerRoutine)

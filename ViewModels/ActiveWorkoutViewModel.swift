@@ -47,7 +47,8 @@ public final class ActiveWorkoutViewModel {
         let id: UUID
         let exercise: Exercise?
         let defaultSets: Int
-        let targetReps: Int
+        let targetRepsMin: Int
+        let targetRepsMax: Int
         let sortOrder: Int
         let defaultWeight: Double
         let restSeconds: Int
@@ -115,7 +116,7 @@ public final class ActiveWorkoutViewModel {
             let ghostW = matchingLog?.weight
             let ghostR = matchingLog?.reps
             let initialWeight = routineExercise.defaultWeight > 0 ? routineExercise.defaultWeight : (ghostW ?? 0.0)
-            let initialReps = routineExercise.targetReps
+            let initialReps = routineExercise.targetRepsMax
 
             sets.append(SetInputState(
                 setNumber: i,
@@ -136,7 +137,8 @@ public final class ActiveWorkoutViewModel {
         let nextOrder = (routine.exercises.map(\.sortOrder).max() ?? -1) + 1
         let routineExercise = RoutineExercise(
             exercise: exercise,
-            targetReps: exercise.targetReps,
+            targetRepsMin: exercise.targetRepsMin,
+            targetRepsMax: exercise.targetRepsMax,
             sortOrder: nextOrder
         )
 
@@ -181,7 +183,8 @@ public final class ActiveWorkoutViewModel {
                 id: $0.id,
                 exercise: $0.exercise,
                 defaultSets: $0.defaultSets,
-                targetReps: $0.targetReps,
+                targetRepsMin: $0.targetRepsMin,
+                targetRepsMax: $0.targetRepsMax,
                 sortOrder: $0.sortOrder,
                 defaultWeight: $0.defaultWeight,
                 restSeconds: $0.restSeconds,
@@ -200,7 +203,8 @@ public final class ActiveWorkoutViewModel {
             guard let snapshot = snapshotsByID[routineExercise.id] else { return true }
             if routineExercise.exercise?.id != snapshot.exercise?.id ||
                 routineExercise.defaultSets != snapshot.defaultSets ||
-                routineExercise.targetReps != snapshot.targetReps ||
+                routineExercise.targetRepsMin != snapshot.targetRepsMin ||
+                routineExercise.targetRepsMax != snapshot.targetRepsMax ||
                 routineExercise.sortOrder != snapshot.sortOrder ||
                 routineExercise.defaultWeight != snapshot.defaultWeight ||
                 routineExercise.restSeconds != snapshot.restSeconds ||
@@ -227,7 +231,8 @@ public final class ActiveWorkoutViewModel {
             guard let routineExercise = originalRoutineExercises.first(where: { $0.id == snapshot.id }) else { continue }
             routineExercise.exercise = snapshot.exercise
             routineExercise.defaultSets = snapshot.defaultSets
-            routineExercise.targetReps = snapshot.targetReps
+            routineExercise.targetRepsMin = snapshot.targetRepsMin
+            routineExercise.targetRepsMax = snapshot.targetRepsMax
             routineExercise.sortOrder = snapshot.sortOrder
             routineExercise.defaultWeight = snapshot.defaultWeight
             routineExercise.restSeconds = snapshot.restSeconds
@@ -266,7 +271,8 @@ public final class ActiveWorkoutViewModel {
                 date: Date(),
                 weight: targetSet.weight,
                 reps: targetSet.reps,
-                targetReps: routineExercise?.targetReps ?? 10,
+                targetRepsMin: routineExercise?.targetRepsMin ?? 8,
+                targetRepsMax: routineExercise?.targetRepsMax ?? 12,
                 isCompleted: true,
                 routineExerciseID: routineExerciseID,
                 setNumber: setIndex + 1,
@@ -675,7 +681,8 @@ public final class ActiveWorkoutViewModel {
                 RoutineExercise(
                     exercise: routineExercise.exercise,
                     defaultSets: routineExercise.defaultSets,
-                    targetReps: routineExercise.targetReps,
+                    targetRepsMin: routineExercise.targetRepsMin,
+                    targetRepsMax: routineExercise.targetRepsMax,
                     sortOrder: routineExercise.sortOrder,
                     defaultWeight: routineExercise.defaultWeight,
                     restSeconds: routineExercise.restSeconds,

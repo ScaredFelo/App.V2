@@ -30,7 +30,8 @@ public final class Routine {
 public final class RoutineExercise {
     public var id: UUID
     public var defaultSets: Int
-    public var targetReps: Int
+    public var targetRepsMin: Int = 8
+    public var targetRepsMax: Int = 12
     public var sortOrder: Int
     public var defaultWeight: Double = 0.0
     public var restSeconds: Int = 90
@@ -39,11 +40,17 @@ public final class RoutineExercise {
     @Relationship
     public var exercise: Exercise?
 
+    @Transient
+    public var targetRepsText: String {
+        "\(targetRepsMin) - \(targetRepsMax)"
+    }
+
     public init(
         id: UUID = UUID(),
         exercise: Exercise?,
         defaultSets: Int = 3,
-        targetReps: Int = 10,
+        targetRepsMin: Int = 8,
+        targetRepsMax: Int = 12,
         sortOrder: Int = 0,
         defaultWeight: Double = 0.0,
         restSeconds: Int? = nil,
@@ -52,7 +59,9 @@ public final class RoutineExercise {
         self.id = id
         self.exercise = exercise
         self.defaultSets = defaultSets
-        self.targetReps = targetReps
+        let lower = max(1, min(targetRepsMin, targetRepsMax))
+        self.targetRepsMin = lower
+        self.targetRepsMax = max(lower, targetRepsMax)
         self.sortOrder = sortOrder
         self.defaultWeight = defaultWeight
         self.notes = notes

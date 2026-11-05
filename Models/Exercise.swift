@@ -9,7 +9,8 @@ public final class Exercise {
     public var equipmentTypeRaw: String
     public var weightTypeRaw: String?
     public var requiresStraps: Bool
-    public var targetReps: Int = 10
+    public var targetRepsMin: Int = 8
+    public var targetRepsMax: Int = 12
     public var defaultRestConditionData: Data
 
     @Relationship(deleteRule: .cascade, inverse: \WorkoutSetLog.exercise)
@@ -49,6 +50,11 @@ public final class Exercise {
         }
     }
 
+    @Transient
+    public var targetRepsText: String {
+        "\(targetRepsMin) - \(targetRepsMax)"
+    }
+
     public init(
         id: UUID = UUID(),
         name: String,
@@ -56,7 +62,8 @@ public final class Exercise {
         equipmentType: EquipmentType,
         weightType: WeightType? = nil,
         requiresStraps: Bool = false,
-        targetReps: Int = 10,
+        targetRepsMin: Int = 8,
+        targetRepsMax: Int = 12,
         defaultRestCondition: RestCondition = .timer(seconds: 90)
     ) {
         self.id = id
@@ -65,7 +72,9 @@ public final class Exercise {
         self.equipmentTypeRaw = equipmentType.rawValue
         self.weightTypeRaw = (weightType ?? WeightType.defaultFor(equipmentType)).rawValue
         self.requiresStraps = requiresStraps
-        self.targetReps = targetReps
+        let lower = max(1, min(targetRepsMin, targetRepsMax))
+        self.targetRepsMin = lower
+        self.targetRepsMax = max(lower, targetRepsMax)
         self.defaultRestConditionData = (try? JSONEncoder().encode(defaultRestCondition)) ?? Data()
     }
 }

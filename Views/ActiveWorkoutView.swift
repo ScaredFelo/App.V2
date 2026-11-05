@@ -9,6 +9,7 @@ public struct ActiveWorkoutView: View {
 
     @ObservedObject private var healthKitManager = HealthKitManager.shared
     @ObservedObject private var liveActivityManager = LiveActivityManager.shared
+    @AppStorage("isBigPictureModeEnabled") private var isBigPictureModeEnabled = false
 
     @State private var viewModel: ActiveWorkoutViewModel
     @State private var showingCancelConfirmation = false
@@ -299,6 +300,7 @@ public struct ActiveWorkoutView: View {
         }
         .withKeyboardDismiss()
         .dismissKeyboardOnTap()
+        .withBigPictureMode(isBigPictureModeEnabled)
     }
 
     private var timerDragGesture: some Gesture {
@@ -512,7 +514,7 @@ struct ExerciseCardView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    Text("Objetivo: \(routineExercise.targetReps) reps")
+                    Text("Objetivo: \(routineExercise.targetRepsText) reps")
                         .font(.caption)
                         .foregroundStyle(.green)
 
@@ -563,7 +565,8 @@ struct ExerciseCardView: View {
             ForEach(Array(sets.enumerated()), id: \.element.id) { index, set in
                 SetRowView(
                     set: set,
-                    targetReps: routineExercise.targetReps,
+                    targetRepsMin: routineExercise.targetRepsMin,
+                    targetRepsMax: routineExercise.targetRepsMax,
                     onToggle: { onToggleSet(index) },
                     onUpdate: { w, r in onUpdateSet(index, w, r) }
                 )
@@ -599,7 +602,8 @@ struct ExerciseCardView: View {
 // MARK: - Set Row Component
 struct SetRowView: View {
     let set: ActiveWorkoutViewModel.SetInputState
-    let targetReps: Int
+    let targetRepsMin: Int
+    let targetRepsMax: Int
     let onToggle: () -> Void
     let onUpdate: (Double, Int) -> Void
 
@@ -608,12 +612,14 @@ struct SetRowView: View {
 
     init(
         set: ActiveWorkoutViewModel.SetInputState,
-        targetReps: Int,
+        targetRepsMin: Int,
+        targetRepsMax: Int,
         onToggle: @escaping () -> Void,
         onUpdate: @escaping (Double, Int) -> Void
     ) {
         self.set = set
-        self.targetReps = targetReps
+        self.targetRepsMin = targetRepsMin
+        self.targetRepsMax = targetRepsMax
         self.onToggle = onToggle
         self.onUpdate = onUpdate
         _weightString = State(initialValue: set.weight == 0 ? "" : String(format: "%.1f", set.weight))
@@ -653,7 +659,7 @@ struct SetRowView: View {
 
             // Reps Input
             VStack(spacing: 2) {
-                TextField(targetReps > 0 ? "\(targetReps)" : "0", text: $repsString)
+                TextField(targetRepsMax > 0 ? "\(targetRepsMax)" : "0", text: $repsString)
                     .keyboardType(.numberPad)
                     .multilineTextAlignment(.center)
                     .font(.subheadline)
@@ -667,7 +673,7 @@ struct SetRowView: View {
                         }
                     }
 
-                Text("obj. \(targetReps)")
+                Text("obj. \(targetRepsMin)-\(targetRepsMax)")
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
