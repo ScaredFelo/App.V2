@@ -782,4 +782,98 @@ public final class ActiveWorkoutViewModel {
 
         return (routine.name, 0, 0)
     }
+
+    // MARK: - Big Picture Mode
+
+    private var bigPictureSortedExercises: [RoutineExercise] {
+        routine.exercises.sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    public var bigPictureCurrentRoutineExercise: RoutineExercise? {
+        bigPictureSortedExercises.first { routineExercise in
+            guard let sets = activeSets[routineExercise.id] else { return false }
+            return sets.contains { !$0.isCompleted }
+        } ?? bigPictureSortedExercises.first
+    }
+
+    public var bigPictureCurrentExercise: String {
+        guard let exercise = bigPictureCurrentRoutineExercise?.exercise else { return "—" }
+        return exercise.name
+    }
+
+    public var bigPictureNextExercise: String {
+        let sorted = bigPictureSortedExercises
+        guard let current = bigPictureCurrentRoutineExercise,
+              let currentIndex = sorted.firstIndex(where: { $0.id == current.id }),
+              currentIndex + 1 < sorted.count,
+              let nextExercise = sorted[currentIndex + 1].exercise else { return "" }
+        return "SIG: \(nextExercise.name)"
+    }
+
+    public var bigPictureCurrentExerciseID: UUID? {
+        bigPictureCurrentRoutineExercise?.id
+    }
+
+    public var bigPictureCurrentWeight: Double {
+        guard let id = bigPictureCurrentExerciseID,
+              let sets = activeSets[id],
+              let pending = sets.first(where: { !$0.isCompleted }) else { return 0 }
+        return pending.weight
+    }
+
+    public var bigPictureCurrentReps: Int {
+        guard let id = bigPictureCurrentExerciseID,
+              let sets = activeSets[id],
+              let pending = sets.first(where: { !$0.isCompleted }) else { return 0 }
+        return pending.reps
+    }
+
+    public var bigPictureSetsForCurrentExercise: [WorkoutSetLog] {
+        guard let exercise = bigPictureCurrentRoutineExercise?.exercise else { return [] }
+        return session.setsCompleted
+            .filter { $0.exercise?.id == exercise.id && $0.isCompleted }
+            .sorted { $0.date < $1.date }
+    }
+
+    public var bigPictureIsTimerShowing: Bool {
+        isResting && hasActiveRestTimer
+    }
+
+    public var bigPictureRemainingTime: Int {
+        guard let endDate = restTimerEndDate else { return 0 }
+        return max(0, Int(ceil(endDate.timeIntervalSinceNow)))
+    }
+
+    public var bigPictureRemainingTimeFormatted: String {
+        let seconds = bigPictureRemainingTime
+        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
+
+    public var bigPictureRestProgress: Double {
+        guard totalRestSeconds > 0 else { return 0 }
+        return max(0, min(1, Double(bigPictureRemainingTime) / Double(totalRestSeconds)))
+    }
+
+    public func bigPictureAdjustWeight(_ delta: Double) {
+        guard let id = bigPictureCurrentExerciseID,
+              var sets = activeSets[id],
+              let index = sets.firstIndex(where: { !$0.isCompleted }) else { return }
+        sets[index].weight = max(0, sets[index].weight + delta)
+        activeSets[id] = sets
+    }
+
+    public func bigPictureAdjustReps(_ delta: Int) {
+        guard let id = bigPictureCurrentExerciseID,
+              var sets = activeSets[id],
+              let index = sets.firstIndex(where: { !$0.isCompleted }) else { return }
+        sets[index].reps = max(0, sets[index].reps + delta)
+        activeSets[id] = sets
+    }
+
+    public func bigPictureRegisterSet(modelContext: ModelContext) {
+        guard let id = bigPictureCurrentExerciseID,
+              let sets = activeSets[id],
+              let setIndex = sets.firstIndex(where: { !$0.isCompleted }) else { return }
+        toggleSetCompletion(for: id, setIndex: setIndex, modelContext: modelContext)
+    }
 }

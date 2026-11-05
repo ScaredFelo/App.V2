@@ -33,6 +33,16 @@ public struct ActiveWorkoutView: View {
     }
 
     public var body: some View {
+        Group {
+            if isBigPictureModeEnabled {
+                bigPictureBody
+            } else {
+                normalBody
+            }
+        }
+    }
+
+    private var normalBody: some View {
         GeometryReader { geometry in
         ZStack(alignment: .bottom) {
             Color.black.ignoresSafeArea()
@@ -300,7 +310,157 @@ public struct ActiveWorkoutView: View {
         }
         .withKeyboardDismiss()
         .dismissKeyboardOnTap()
-        .withBigPictureMode(isBigPictureModeEnabled)
+    }
+
+    private var bigPictureBody: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                // MARK: - Header BPM
+                HStack {
+                    Spacer()
+                    HStack(spacing: 8) {
+                        Image(systemName: "heart.fill")
+                            .font(.title2)
+                            .foregroundStyle(.red)
+                        Text("\(Int(healthKitManager.currentBPM)) BPM")
+                            .font(.title2.bold())
+                            .foregroundStyle(.red)
+                            .contentTransition(.numericText())
+                    }
+                }
+                .padding(.top, 36)
+                .padding(.horizontal, 24)
+
+                // MARK: - Ejercicio actual y siguiente
+                VStack(spacing: 8) {
+                    Text(viewModel.bigPictureCurrentExercise)
+                        .font(.system(size: 60, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+
+                    if !viewModel.bigPictureNextExercise.isEmpty {
+                        Text(viewModel.bigPictureNextExercise)
+                            .font(.title3)
+                            .foregroundStyle(.white.opacity(0.85))
+                            .multilineTextAlignment(.center)
+                    }
+                }
+                .padding(.horizontal, 24)
+
+                // MARK: - Peso central
+                Text("\(Int(viewModel.bigPictureCurrentWeight)) kg")
+                    .font(.system(size: 88, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+
+                // MARK: - Controles de repeticiones
+                HStack(spacing: 30) {
+                    Button {
+                        viewModel.bigPictureAdjustReps(-1)
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.system(size: 52))
+                            .foregroundStyle(.white)
+                    }
+
+                    Text("\(viewModel.bigPictureCurrentReps)")
+                        .font(.system(size: 72, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .frame(width: 140, alignment: .center)
+
+                    Text("REPS")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+
+                    Button {
+                        viewModel.bigPictureAdjustReps(1)
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 52))
+                            .foregroundStyle(.white)
+                    }
+                }
+
+                // MARK: - Historial de series
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("SERIES PASADAS (\(viewModel.bigPictureCurrentExercise))")
+                        .font(.headline.bold())
+                        .foregroundStyle(.white)
+
+                    if viewModel.bigPictureSetsForCurrentExercise.isEmpty {
+                        Text("Sin series registradas")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(Array(viewModel.bigPictureSetsForCurrentExercise.enumerated()), id: \.element.id) { index, log in
+                            HStack {
+                                Text("\(index + 1). SERIE")
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text("\(Int(log.weight)) kg · \(log.reps) reps")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white)
+                            }
+                            .padding(.vertical, 5)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+
+                Spacer(minLength: 0)
+
+                // MARK: - Temporizador integrado o botón registrar serie
+                if viewModel.bigPictureIsTimerShowing {
+                    bigPictureRestBar
+                } else {
+                    Button {
+                        viewModel.bigPictureRegisterSet(modelContext: modelContext)
+                    } label: {
+                        Text("REGISTRAR SERIE")
+                            .font(.title2.bold())
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 20)
+                            .background(Color.white)
+                            .cornerRadius(16)
+                    }
+                    .padding(.horizontal, 44)
+                    .padding(.bottom, 36)
+                }
+            }
+        }
+    }
+
+    private var bigPictureRestBar: some View {
+        TimelineView(.periodic(from: .now, by: 1.0)) { _ in
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.white.opacity(0.12))
+                        .frame(height: 48)
+
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.white)
+                        .frame(
+                            width: max(0, viewModel.bigPictureRestProgress * geometry.size.width),
+                            height: 48
+                        )
+
+                    Text(viewModel.bigPictureRemainingTimeFormatted)
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .frame(height: 48)
+                .padding(.horizontal, 40)
+            }
+            .padding(.bottom, 36)
+        }
     }
 
     private var timerDragGesture: some Gesture {
