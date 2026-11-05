@@ -9,6 +9,7 @@ public final class Exercise {
     public var equipmentTypeRaw: String
     public var weightTypeRaw: String?
     public var requiresStraps: Bool
+    public var targetReps: Int = 10
     public var defaultRestConditionData: Data
 
     @Relationship(deleteRule: .cascade, inverse: \WorkoutSetLog.exercise)
@@ -55,6 +56,7 @@ public final class Exercise {
         equipmentType: EquipmentType,
         weightType: WeightType? = nil,
         requiresStraps: Bool = false,
+        targetReps: Int = 10,
         defaultRestCondition: RestCondition = .timer(seconds: 90)
     ) {
         self.id = id
@@ -63,6 +65,7 @@ public final class Exercise {
         self.equipmentTypeRaw = equipmentType.rawValue
         self.weightTypeRaw = (weightType ?? WeightType.defaultFor(equipmentType)).rawValue
         self.requiresStraps = requiresStraps
+        self.targetReps = targetReps
         self.defaultRestConditionData = (try? JSONEncoder().encode(defaultRestCondition)) ?? Data()
     }
 }

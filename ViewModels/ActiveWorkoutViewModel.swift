@@ -134,7 +134,11 @@ public final class ActiveWorkoutViewModel {
     @discardableResult
     public func addExercise(_ exercise: Exercise, modelContext: ModelContext) -> RoutineExercise {
         let nextOrder = (routine.exercises.map(\.sortOrder).max() ?? -1) + 1
-        let routineExercise = RoutineExercise(exercise: exercise, sortOrder: nextOrder)
+        let routineExercise = RoutineExercise(
+            exercise: exercise,
+            targetReps: exercise.targetReps,
+            sortOrder: nextOrder
+        )
 
         modelContext.insert(routineExercise)
         routine.exercises.append(routineExercise)
@@ -262,6 +266,7 @@ public final class ActiveWorkoutViewModel {
                 date: Date(),
                 weight: targetSet.weight,
                 reps: targetSet.reps,
+                targetReps: routineExercise?.targetReps ?? 10,
                 isCompleted: true,
                 routineExerciseID: routineExerciseID,
                 setNumber: setIndex + 1,

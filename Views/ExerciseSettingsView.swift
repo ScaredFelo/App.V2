@@ -33,6 +33,8 @@ struct ExerciseSettingsView: View {
                         }
                     }
 
+                    Stepper("Reps objetivo: \(exercise.targetReps)", value: $exercise.targetReps, in: 1...50)
+
                     Toggle("Requiere Straps", isOn: $exercise.requiresStraps)
                 }
 
@@ -48,6 +50,7 @@ struct ExerciseSettingsView: View {
             .tint(.green)
             .navigationTitle("Ajustar ejercicio")
             .navigationBarTitleDisplayMode(.inline)
+            .withKeyboardDismiss()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Listo") {

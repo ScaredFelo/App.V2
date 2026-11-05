@@ -78,7 +78,10 @@ public struct RoutineListView: View {
                 routineToEdit = nil
             }) { session in
                 if let routine = selectedRoutineForWorkout {
-                    ActiveWorkoutView(session: session, routine: routine, modelContext: modelContext)
+                    NavigationStack {
+                        ActiveWorkoutView(session: session, routine: routine, modelContext: modelContext)
+                    }
+                    .interactiveDismissDisabled(true)
                 }
             }
             .sheet(item: $routineToEdit, onDismiss: {

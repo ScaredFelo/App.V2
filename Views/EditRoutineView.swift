@@ -85,6 +85,7 @@ struct EditRoutineView: View {
         .tint(.green)
         .navigationTitle("Editar rutina")
         .navigationBarTitleDisplayMode(.inline)
+        .withKeyboardDismiss()
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancelar") {
@@ -128,7 +129,11 @@ struct EditRoutineView: View {
         .sheet(isPresented: $showingExercisePicker) {
             ExercisePickerView { exercise in
                 let nextOrder = (routine.exercises.map(\.sortOrder).max() ?? -1) + 1
-                let routineExercise = RoutineExercise(exercise: exercise, sortOrder: nextOrder)
+                let routineExercise = RoutineExercise(
+                    exercise: exercise,
+                    targetReps: exercise.targetReps,
+                    sortOrder: nextOrder
+                )
                 if !isNewRoutine {
                     modelContext.insert(routineExercise)
                 }
@@ -238,7 +243,7 @@ private struct RoutineExerciseEditorRow: View {
             }
 
             Stepper("Series: \(routineExercise.defaultSets)", value: $routineExercise.defaultSets, in: 1...12)
-            Stepper("Repeticiones: \(routineExercise.targetReps)", value: $routineExercise.targetReps, in: 1...50)
+            Stepper("Reps objetivo: \(routineExercise.targetReps)", value: $routineExercise.targetReps, in: 1...50)
 
             HStack {
                 Text("Peso por defecto")

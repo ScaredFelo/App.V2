@@ -154,6 +154,7 @@ public struct AddExerciseView: View {
     @State private var equipmentType: EquipmentType = .mancuernas
     @State private var weightType: WeightType = .mancuernas
     @State private var requiresStraps = false
+    @State private var targetReps = 10
     @State private var restSeconds = 90
     @State private var useBpmDrop = false
     @State private var targetBpm = 110
@@ -178,6 +179,7 @@ public struct AddExerciseView: View {
                             Text(eq.rawValue).tag(eq)
                         }
                     }
+                    Stepper("Reps objetivo: \(targetReps)", value: $targetReps, in: 1...50)
                     Toggle("Requiere Straps", isOn: $requiresStraps)
                 }
 
@@ -191,6 +193,7 @@ public struct AddExerciseView: View {
                 }
             }
             .navigationTitle("Nuevo Ejercicio")
+            .withKeyboardDismiss()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") { dismiss() }
@@ -204,6 +207,7 @@ public struct AddExerciseView: View {
                             equipmentType: equipmentType,
                             weightType: weightType,
                             requiresStraps: requiresStraps,
+                            targetReps: targetReps,
                             defaultRestCondition: restCondition
                         )
                         modelContext.insert(newExercise)

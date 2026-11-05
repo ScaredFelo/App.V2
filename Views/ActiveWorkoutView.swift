@@ -297,6 +297,8 @@ public struct ActiveWorkoutView: View {
         } message: {
             Text("El ejercicio se quitará del entrenamiento actual.")
         }
+        .withKeyboardDismiss()
+        .dismissKeyboardOnTap()
     }
 
     private var timerDragGesture: some Gesture {
@@ -510,6 +512,10 @@ struct ExerciseCardView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
+                    Text("Objetivo: \(routineExercise.targetReps) reps")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+
                     if exercise.requiresStraps {
                         Label("Recoger Straps", systemImage: "exclamationmark.triangle.fill")
                             .font(.caption.bold())
@@ -557,6 +563,7 @@ struct ExerciseCardView: View {
             ForEach(Array(sets.enumerated()), id: \.element.id) { index, set in
                 SetRowView(
                     set: set,
+                    targetReps: routineExercise.targetReps,
                     onToggle: { onToggleSet(index) },
                     onUpdate: { w, r in onUpdateSet(index, w, r) }
                 )
@@ -592,14 +599,21 @@ struct ExerciseCardView: View {
 // MARK: - Set Row Component
 struct SetRowView: View {
     let set: ActiveWorkoutViewModel.SetInputState
+    let targetReps: Int
     let onToggle: () -> Void
     let onUpdate: (Double, Int) -> Void
 
     @State private var weightString: String
     @State private var repsString: String
 
-    init(set: ActiveWorkoutViewModel.SetInputState, onToggle: @escaping () -> Void, onUpdate: @escaping (Double, Int) -> Void) {
+    init(
+        set: ActiveWorkoutViewModel.SetInputState,
+        targetReps: Int,
+        onToggle: @escaping () -> Void,
+        onUpdate: @escaping (Double, Int) -> Void
+    ) {
         self.set = set
+        self.targetReps = targetReps
         self.onToggle = onToggle
         self.onUpdate = onUpdate
         _weightString = State(initialValue: set.weight == 0 ? "" : String(format: "%.1f", set.weight))
@@ -638,19 +652,27 @@ struct SetRowView: View {
                 }
 
             // Reps Input
-            TextField("0", text: $repsString)
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.center)
-                .font(.subheadline)
-                .padding(6)
-                .background(Color(.systemGray6).opacity(0.3))
-                .cornerRadius(8)
-                .frame(width: 50, height: 32)
-                .onChange(of: repsString) { _, newValue in
-                    if let r = Int(newValue) {
-                        onUpdate(set.weight, r)
+            VStack(spacing: 2) {
+                TextField(targetReps > 0 ? "\(targetReps)" : "0", text: $repsString)
+                    .keyboardType(.numberPad)
+                    .multilineTextAlignment(.center)
+                    .font(.subheadline)
+                    .padding(6)
+                    .background(Color(.systemGray6).opacity(0.3))
+                    .cornerRadius(8)
+                    .frame(width: 50, height: 32)
+                    .onChange(of: repsString) { _, newValue in
+                        if let r = Int(newValue) {
+                            onUpdate(set.weight, r)
+                        }
                     }
-                }
+
+                Text("obj. \(targetReps)")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .frame(width: 50)
 
             // Checkmark Button
             Button(action: onToggle) {
