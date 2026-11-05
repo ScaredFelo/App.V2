@@ -25,6 +25,11 @@ public final class ActiveWorkoutViewModel {
     public var isTimerMinimized: Bool = false
     public var isRestFinishing: Bool = false
 
+    public var hasActiveRestTimer: Bool {
+        guard let endDate = restTimerEndDate else { return false }
+        return endDate > Date()
+    }
+
     private var timerTask: Task<Void, Never>?
     private var bpmObserverTask: Task<Void, Never>?
     private var restDismissalTask: Task<Void, Never>?
@@ -635,6 +640,7 @@ public final class ActiveWorkoutViewModel {
     public func finishWorkout(modelContext: ModelContext) -> WorkoutSession {
         stopRest()
         endWorkoutActivity()
+        HealthKitManager.shared.stopWorkoutSession()
         HealthKitManager.shared.stopHeartRateQuery()
         session.endDate = Date()
         try? modelContext.save()
@@ -683,6 +689,7 @@ public final class ActiveWorkoutViewModel {
     public func cancelWorkout(modelContext: ModelContext) {
         stopRest()
         endWorkoutActivity()
+        HealthKitManager.shared.stopWorkoutSession()
         HealthKitManager.shared.stopHeartRateQuery()
         restoreOriginalStructure(modelContext: modelContext)
         modelContext.delete(session)
@@ -710,6 +717,7 @@ public final class ActiveWorkoutViewModel {
         guard session.endDate == nil, !didStartWorkoutActivity else { return }
         didStartWorkoutActivity = true
         NotificationManager.shared.requestAuthorization()
+        HealthKitManager.shared.startWorkoutSession()
         AudioAlertService.shared.startBackgroundAudio()
 
         LiveActivityManager.shared.startActivity(

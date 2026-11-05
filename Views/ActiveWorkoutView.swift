@@ -129,7 +129,7 @@ public struct ActiveWorkoutView: View {
             .frame(width: geometry.size.width)
 
             // Temporizador maximizado
-            if viewModel.isResting && !viewModel.isTimerMinimized {
+            if viewModel.isResting && (!viewModel.isTimerMinimized || (!viewModel.hasActiveRestTimer && !viewModel.isRestFinishing)) {
                 ZStack {
                     Color.black
                         .ignoresSafeArea()
@@ -171,7 +171,7 @@ public struct ActiveWorkoutView: View {
             }
 
             // Temporizador minimizado flotando sobre la lista
-            if viewModel.isResting && viewModel.isTimerMinimized {
+            if viewModel.isResting && viewModel.isTimerMinimized && viewModel.hasActiveRestTimer {
                 TimelineView(.periodic(from: .now, by: 1.0)) { timeline in
                     MinimizedTimerView(
                         timeRemaining: displayedRestTime(at: timeline.date),
@@ -213,6 +213,7 @@ public struct ActiveWorkoutView: View {
             pendingNewRoutinePromptID = nil
             try? modelContext.save()
             BPMManager.shared.stopScanning()
+            HealthKitManager.shared.stopWorkoutSession()
             HealthKitManager.shared.stopHeartRateQuery()
         }
         .onChange(of: scenePhase) { _, newPhase in

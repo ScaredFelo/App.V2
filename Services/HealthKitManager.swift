@@ -2,7 +2,7 @@ import Foundation
 import HealthKit
 import Combine
 
-final class HealthKitManager: ObservableObject {
+final class HealthKitManager: NSObject, ObservableObject, HKWorkoutSessionDelegate {
     static let shared = HealthKitManager()
 
     @Published var currentBPM: Int = 0
@@ -14,12 +14,19 @@ final class HealthKitManager: ObservableObject {
     private let heartRateType = HKObjectType.quantityType(forIdentifier: .heartRate)
     private var heartRateQuery: HKAnchoredObjectQuery?
     private var anchor: HKQueryAnchor?
+    private var workoutSession: HKWorkoutSession?
+    private var wantsWorkoutSession = false
+    private var latestSampleBPM = 0
+    private var latestSampleDate: Date?
+    private var bpmHeartbeatCancellable: AnyCancellable?
 
     private var bpmUnit: HKUnit {
         HKUnit.count().unitDivided(by: HKUnit.minute())
     }
 
-    private init() {}
+    private override init() {
+        super.init()
+    }
 
     private enum HealthKitRequestError: LocalizedError {
         case healthDataUnavailable
@@ -83,6 +90,10 @@ final class HealthKitManager: ObservableObject {
 
                     self.debugMessage = "Autorizado. Esperando lecturas de BPM..."
                     self.startHeartRateQuery()
+
+                    if self.wantsWorkoutSession {
+                        self.startWorkoutSessionIfAvailable()
+                    }
                 } catch {
                     self.isAuthorized = false
                     self.debugMessage = error.localizedDescription
@@ -96,6 +107,8 @@ final class HealthKitManager: ObservableObject {
 
     func startHeartRateQuery() {
         guard heartRateQuery == nil, let heartRateType else { return }
+
+        startBPMHeartbeat()
 
         healthStore.enableBackgroundDelivery(for: heartRateType, frequency: .immediate) { success, error in
             if let error {
@@ -129,6 +142,8 @@ final class HealthKitManager: ObservableObject {
     }
 
     func stopHeartRateQuery() {
+        stopBPMHeartbeat()
+
         if let query = heartRateQuery {
             healthStore.stop(query)
             heartRateQuery = nil
@@ -139,6 +154,118 @@ final class HealthKitManager: ObservableObject {
         }
 
         anchor = nil
+        latestSampleBPM = 0
+        latestSampleDate = nil
+        currentBPM = 0
+    }
+
+    // MARK: - Heart Rate Publishing
+
+    private func startBPMHeartbeat() {
+        guard bpmHeartbeatCancellable == nil else { return }
+
+        bpmHeartbeatCancellable = Timer.publish(every: 0.25, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.publishLatestBPMIfRecent()
+            }
+    }
+
+    private func stopBPMHeartbeat() {
+        bpmHeartbeatCancellable?.cancel()
+        bpmHeartbeatCancellable = nil
+    }
+
+    private func publishLatestBPMIfRecent() {
+        guard latestSampleBPM > 0, let latestSampleDate else { return }
+        guard Date().timeIntervalSince(latestSampleDate) <= 5 else { return }
+
+        publishBPM(latestSampleBPM)
+    }
+
+    private func publishBPM(_ bpm: Int) {
+        let value = max(0, bpm)
+
+        if currentBPM != value {
+            currentBPM = value
+        }
+
+        LiveActivityManager.shared.setBPM(value)
+    }
+
+    // MARK: - Workout Session
+
+    func startWorkoutSession() {
+        wantsWorkoutSession = true
+        startWorkoutSessionIfAvailable()
+    }
+
+    func stopWorkoutSession() {
+        wantsWorkoutSession = false
+
+        guard let session = workoutSession else { return }
+
+        session.stopActivity(with: Date())
+        session.end()
+        workoutSession = nil
+    }
+
+    private func startWorkoutSessionIfAvailable() {
+        guard wantsWorkoutSession, workoutSession == nil else { return }
+
+        #if compiler(>=6.2)
+        guard #available(iOS 26.0, *) else {
+            debugMessage = "Workout session nativa disponible desde iOS 26"
+            return
+        }
+
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+
+        do {
+            let configuration = HKWorkoutConfiguration()
+            configuration.activityType = .traditionalStrengthTraining
+            configuration.locationType = .unknown
+
+            let session = try HKWorkoutSession(
+                healthStore: healthStore,
+                configuration: configuration
+            )
+            session.delegate = self
+            workoutSession = session
+            session.prepare()
+            session.startActivity(with: Date())
+            debugMessage = "Sesión de entrenamiento HealthKit activa"
+        } catch {
+            workoutSession = nil
+            debugMessage = "No se pudo iniciar la sesión de entrenamiento: \(error.localizedDescription)"
+            print("[HealthKit] Error al iniciar HKWorkoutSession: \(error.localizedDescription)")
+        }
+        #else
+        debugMessage = "Workout session nativa no disponible en este SDK"
+        #endif
+    }
+
+    func workoutSession(
+        _ workoutSession: HKWorkoutSession,
+        didChangeTo toState: HKWorkoutSessionState,
+        from fromState: HKWorkoutSessionState,
+        date: Date
+    ) {
+        guard toState == .ended || toState == .stopped else { return }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.workoutSession === workoutSession else { return }
+            self.workoutSession = nil
+        }
+    }
+
+    func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
+        print("[HealthKit] Error en HKWorkoutSession: \(error.localizedDescription)")
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.workoutSession === workoutSession else { return }
+            self.workoutSession = nil
+        }
     }
 
     private func handleHeartRateSamples(_ samples: [HKSample]?, newAnchor: HKQueryAnchor?, error: Error?) {
@@ -156,16 +283,17 @@ final class HealthKitManager: ObservableObject {
         let sourceName = latestSample?.sourceRevision.source.name
 
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+            guard let self, self.heartRateQuery != nil else { return }
 
             self.anchor = newAnchor
 
             guard let bpm, bpm > 0, let sourceName else { return }
 
-            self.currentBPM = bpm
+            self.latestSampleBPM = bpm
+            self.latestSampleDate = Date()
             self.dataSourceName = sourceName
             self.debugMessage = "Leyendo pulsaciones de \(sourceName)"
-            LiveActivityManager.shared.setBPM(bpm)
+            self.publishBPM(bpm)
         }
     }
 }

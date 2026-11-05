@@ -18,7 +18,6 @@ final class LiveActivityManager: ObservableObject {
 
     private var currentActivity: Activity<WorkoutActivityAttributes>?
     private var lastState: WorkoutActivityAttributes.ContentState?
-    private var pendingUpdateTask: Task<Void, Never>?
     private var snapshot = Snapshot(
         exerciseName: "",
         currentSet: 0,
@@ -29,7 +28,6 @@ final class LiveActivityManager: ObservableObject {
     )
     private var bpm = 0
     private let staleMargin: TimeInterval = 14_400
-    private let updateCoalescingDelay: UInt64 = 150_000_000
 
     private init() {}
 
@@ -40,8 +38,6 @@ final class LiveActivityManager: ObservableObject {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             currentActivity = nil
             lastState = nil
-            pendingUpdateTask?.cancel()
-            pendingUpdateTask = nil
             debugMessage = "Live Activities desactivadas en Ajustes de iOS"
             print("[LiveActivity] Desactivadas en Ajustes de iOS")
             return
@@ -109,8 +105,6 @@ final class LiveActivityManager: ObservableObject {
         guard isUsable(activity) else {
             currentActivity = nil
             lastState = nil
-            pendingUpdateTask?.cancel()
-            pendingUpdateTask = nil
             debugMessage = "Live Activity finalizada por el sistema"
             return
         }
@@ -123,22 +117,13 @@ final class LiveActivityManager: ObservableObject {
         guard lastState != state else { return }
         lastState = state
 
-        pendingUpdateTask?.cancel()
-
         let content = makeContent(for: state)
-        let delay = updateCoalescingDelay
-        pendingUpdateTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: delay)
-            guard !Task.isCancelled else { return }
-            guard self?.isUsable(activity) ?? false else { return }
+        Task {
             await activity.update(content)
         }
     }
 
     func endActivity() {
-        pendingUpdateTask?.cancel()
-        pendingUpdateTask = nil
-
         guard let activity = currentActivity else {
             lastState = nil
             return
