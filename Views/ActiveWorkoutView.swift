@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import SwiftData
+import Charts
 
 public struct ActiveWorkoutView: View {
     @Environment(\.modelContext) private var modelContext
@@ -13,6 +14,7 @@ public struct ActiveWorkoutView: View {
 
     @State private var viewModel: ActiveWorkoutViewModel
     @State private var showingCancelConfirmation = false
+    @State private var showingBigPictureCancelConfirmation = false
     @State private var showingRoutineChangeOptions = false
     @State private var showingNewRoutineNameAlert = false
     @State private var showingExercisePicker = false
@@ -308,6 +310,18 @@ public struct ActiveWorkoutView: View {
         } message: {
             Text("El ejercicio se quitará del entrenamiento actual.")
         }
+        .alert(
+            "¿Cancelar entrenamiento?",
+            isPresented: $showingBigPictureCancelConfirmation
+        ) {
+            Button("Sí, cancelar", role: .destructive) {
+                viewModel.cancelWorkout(modelContext: modelContext)
+                dismiss()
+            }
+            Button("Seguir entrenando", role: .cancel) {}
+        } message: {
+            Text("Se descartará la sesión actual sin guardar el historial.")
+        }
         .withKeyboardDismiss()
         .dismissKeyboardOnTap()
     }
@@ -316,7 +330,30 @@ public struct ActiveWorkoutView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            VStack(spacing: 20) {
+            VStack(spacing: 12) {
+                // Barra superior: cancelar + nombre rutina
+                HStack {
+                    Button {
+                        showingBigPictureCancelConfirmation = true
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.top, 6)
+                    .padding(.leading, 6)
+
+                    Spacer()
+
+                    Text(viewModel.routine.name)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .padding(.top, 6)
+                }
+                .padding(.horizontal, 20)
+
                 // MARK: - Header BPM
                 HStack {
                     Spacer()
@@ -330,46 +367,73 @@ public struct ActiveWorkoutView: View {
                             .contentTransition(.numericText())
                     }
                 }
-                .padding(.top, 36)
+                .padding(.top, 2)
                 .padding(.horizontal, 24)
 
-                // MARK: - Ejercicio actual y siguiente
-                VStack(spacing: 8) {
+                // MARK: - Ejercicio actual y siguiente (jerarquía de títulos)
+                VStack(spacing: 4) {
                     Text(viewModel.bigPictureCurrentExercise)
-                        .font(.system(size: 60, weight: .bold, design: .rounded))
+                        .font(.title2.bold())
                         .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
 
                     if !viewModel.bigPictureNextExercise.isEmpty {
                         Text(viewModel.bigPictureNextExercise)
-                            .font(.title3)
-                            .foregroundStyle(.white.opacity(0.85))
-                            .multilineTextAlignment(.center)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                     }
                 }
                 .padding(.horizontal, 24)
 
-                // MARK: - Peso central
-                Text("\(Int(viewModel.bigPictureCurrentWeight)) kg")
-                    .font(.system(size: 88, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
+                // MARK: - Peso central con controles de carga
+                VStack(spacing: 4) {
+                    Text("\(Int(viewModel.bigPictureCurrentWeight)) kg")
+                        .font(.system(size: 72, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 4)
 
-                // MARK: - Controles de repeticiones
+                    HStack(spacing: 16) {
+                        Button {
+                            viewModel.bigPictureAdjustWeight(-2.5)
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(.white)
+                        }
+
+                        Text("Ajustar carga")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.secondary)
+
+                        Button {
+                            viewModel.bigPictureAdjustWeight(2.5)
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(.white)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+
+                // MARK: - Repeticiones (reducido)
                 HStack(spacing: 30) {
                     Button {
                         viewModel.bigPictureAdjustReps(-1)
                     } label: {
                         Image(systemName: "minus.circle.fill")
-                            .font(.system(size: 52))
+                            .font(.system(size: 42))
                             .foregroundStyle(.white)
                     }
 
                     Text("\(viewModel.bigPictureCurrentReps)")
-                        .font(.system(size: 72, weight: .bold, design: .rounded))
+                        .font(.system(size: 60, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                        .frame(width: 140, alignment: .center)
+                        .frame(width: 120, alignment: .center)
 
                     Text("REPS")
                         .font(.caption2.bold())
@@ -379,13 +443,34 @@ public struct ActiveWorkoutView: View {
                         viewModel.bigPictureAdjustReps(1)
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 52))
+                            .font(.system(size: 42))
                             .foregroundStyle(.white)
                     }
                 }
 
+                // MARK: - Temporizador integrado o botón registrar serie
+                if viewModel.bigPictureIsTimerShowing {
+                    bigPictureTimerBar
+                    bigPictureTimerControls
+                    bigPictureBPMChart
+                } else {
+                    Button {
+                        viewModel.bigPictureRegisterSet(modelContext: modelContext)
+                    } label: {
+                        Text("REGISTRAR SERIE")
+                            .font(.title2.bold())
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.white)
+                            .cornerRadius(14)
+                    }
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 24)
+                }
+
                 // MARK: - Historial de series
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("SERIES PASADAS (\(viewModel.bigPictureCurrentExercise))")
                         .font(.headline.bold())
                         .foregroundStyle(.white)
@@ -405,7 +490,7 @@ public struct ActiveWorkoutView: View {
                                     .font(.subheadline)
                                     .foregroundStyle(.white)
                             }
-                            .padding(.vertical, 5)
+                            .padding(.vertical, 4)
                         }
                     }
                 }
@@ -413,54 +498,122 @@ public struct ActiveWorkoutView: View {
                 .padding(.horizontal, 24)
 
                 Spacer(minLength: 0)
-
-                // MARK: - Temporizador integrado o botón registrar serie
-                if viewModel.bigPictureIsTimerShowing {
-                    bigPictureRestBar
-                } else {
-                    Button {
-                        viewModel.bigPictureRegisterSet(modelContext: modelContext)
-                    } label: {
-                        Text("REGISTRAR SERIE")
-                            .font(.title2.bold())
-                            .foregroundStyle(.black)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 20)
-                            .background(Color.white)
-                            .cornerRadius(16)
-                    }
-                    .padding(.horizontal, 44)
-                    .padding(.bottom, 36)
-                }
+            }
+            .padding(.bottom, 16)
+            .onChange(of: healthKitManager.currentBPM) { _, newBPM in
+                viewModel.addBPMPoint(newBPM)
+            }
+            .onAppear {
+                viewModel.clearBPMHistory()
             }
         }
     }
 
-    private var bigPictureRestBar: some View {
+    private var bigPictureTimerBar: some View {
         TimelineView(.periodic(from: .now, by: 1.0)) { _ in
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: 10)
                         .fill(Color.white.opacity(0.12))
-                        .frame(height: 48)
+                        .frame(height: 36)
+                        .frame(width: geometry.size.width)
 
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: 10)
                         .fill(Color.white)
                         .frame(
                             width: max(0, viewModel.bigPictureRestProgress * geometry.size.width),
-                            height: 48
+                            height: 36
                         )
 
                     Text(viewModel.bigPictureRemainingTimeFormatted)
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundStyle(.black)
                         .frame(maxWidth: .infinity, alignment: .center)
                 }
-                .frame(height: 48)
-                .padding(.horizontal, 40)
+                .frame(height: 36)
+                .padding(.horizontal, 24)
             }
-            .padding(.bottom, 36)
+            .frame(height: 36)
+            .padding(.bottom, 6)
         }
+    }
+
+    private var bigPictureTimerControls: some View {
+        HStack(spacing: 14) {
+            Button {
+                if viewModel.isRestPaused {
+                    viewModel.resumeRest()
+                } else {
+                    viewModel.pauseRest()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: viewModel.isRestPaused ? "play.fill" : "pause.fill")
+                    Text(viewModel.isRestPaused ? "Reanudar" : "Pausar")
+                }
+                .font(.subheadline.bold())
+                .foregroundStyle(.black)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(Color.white)
+                .cornerRadius(10)
+            }
+
+            Button {
+                viewModel.skipRest()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "forward.end.fill")
+                    Text("Saltar")
+                }
+                .font(.subheadline.bold())
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(Color.red)
+                .cornerRadius(10)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 6)
+    }
+
+    private var bigPictureBPMChart: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("PULSACIONES")
+                .font(.caption2.bold())
+                .foregroundStyle(.secondary)
+
+            if viewModel.bpmHistory.isEmpty {
+                Text("Esperando datos de frecuencia cardíaca...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary.opacity(0.7))
+                    .frame(height: 100)
+                    .frame(maxWidth: .infinity)
+            } else {
+                Chart(viewModel.bpmHistory) { point in
+                    LineMark(
+                        x: .value("Tiempo", point.time),
+                        y: .value("BPM", point.bpm)
+                    )
+                    .foregroundStyle(.red)
+                    .lineWidth(2)
+                    .symbol(.circle)
+                    .symbolSize(6)
+                }
+                .chartYAxis {
+                    AxisMarks(position: .leading) { _ in
+                        AxisValueLabel()
+                        AxisGridLine()
+                    }
+                }
+                .chartXAxis(.hidden)
+                .frame(height: 100)
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 4)
     }
 
     private var timerDragGesture: some Gesture {

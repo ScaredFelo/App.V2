@@ -36,9 +36,11 @@ struct SettingsView: View {
             }
 
             Section {
-                ForEach(UserSettingsManager.plateOptions, id: \.self) { plate in
-                    Toggle(isOn: plateBinding(for: plate)) {
-                        Text("\(UserSettingsManager.formatted(plate)) kg")
+                DisclosureGroup("Discos disponibles en el gimnasio") {
+                    ForEach(UserSettingsManager.plateOptions, id: \.self) { plate in
+                        Toggle(isOn: plateBinding(for: plate)) {
+                            Text("\(UserSettingsManager.formatted(plate)) kg")
+                        }
                     }
                 }
             } header: {

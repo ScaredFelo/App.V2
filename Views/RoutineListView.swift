@@ -47,14 +47,6 @@ public struct RoutineListView: View {
             }
             .navigationTitle(isEditing ? "Editar rutinas" : "Rutinas")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    if isEditing {
-                        Button("Cancelar") {
-                            exitEditMode()
-                        }
-                    }
-                }
-
                 ToolbarItem(placement: .topBarTrailing) {
                     if isEditing {
                         Button(action: confirmEditMode) {
@@ -214,8 +206,9 @@ struct RoutineRowView: View {
 
     var body: some View {
         ZStack {
-            if isEditing {
+            if isEditing && abs(dragOffset) > 24 {
                 deleteBackground
+                    .opacity(min(1, abs(dragOffset) / 120))
             }
 
             cardSurface

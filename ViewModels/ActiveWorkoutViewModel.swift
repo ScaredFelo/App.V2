@@ -876,4 +876,27 @@ public final class ActiveWorkoutViewModel {
               let setIndex = sets.firstIndex(where: { !$0.isCompleted }) else { return }
         toggleSetCompletion(for: id, setIndex: setIndex, modelContext: modelContext)
     }
+
+    // MARK: - BPM History (Big Picture chart)
+
+    public struct BPMDataPoint: Identifiable {
+        public let id = UUID()
+        public let time: Date
+        public let bpm: Int
+    }
+
+    public var bpmHistory: [BPMDataPoint] = []
+    private let maxBpmHistoryPoints = 60
+
+    public func addBPMPoint(_ bpm: Int) {
+        guard bpm > 0 else { return }
+        bpmHistory.append(BPMDataPoint(time: Date(), bpm: bpm))
+        if bpmHistory.count > maxBpmHistoryPoints {
+            bpmHistory.removeFirst(bpmHistory.count - maxBpmHistoryPoints)
+        }
+    }
+
+    public func clearBPMHistory() {
+        bpmHistory.removeAll()
+    }
 }
