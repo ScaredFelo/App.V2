@@ -208,7 +208,7 @@ struct RoutineRowView: View {
         ZStack {
             if isEditing && abs(dragOffset) > 24 {
                 deleteBackground
-                    .opacity(min(1, abs(dragOffset) / 120))
+                    .opacity(min(1, abs(dragOffset) / CGFloat(120)))
             }
 
             cardSurface

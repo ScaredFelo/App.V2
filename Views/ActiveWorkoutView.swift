@@ -591,23 +591,20 @@ public struct ActiveWorkoutView: View {
                     .frame(height: 100)
                     .frame(maxWidth: .infinity)
             } else {
-                Chart(viewModel.bpmHistory) { point in
+                Chart(viewModel.bpmHistory) { sample in
                     LineMark(
-                        x: .value("Tiempo", point.time),
-                        y: .value("BPM", point.bpm)
+                        x: .value("Tiempo", sample.time),
+                        y: .value("BPM", sample.bpm)
                     )
-                    .foregroundStyle(.red)
-                    .lineWidth(2)
-                    .symbol(.circle)
-                    .symbolSize(6)
+                    .foregroundStyle(Color.red)
+
+                    PointMark(
+                        x: .value("Tiempo", sample.time),
+                        y: .value("BPM", sample.bpm)
+                    )
+                    .foregroundStyle(Color.red)
                 }
-                .chartYAxis {
-                    AxisMarks(position: .leading) { _ in
-                        AxisValueLabel()
-                        AxisGridLine()
-                    }
-                }
-                .chartXAxis(.hidden)
+                .chartYScale(domain: 40...200)
                 .frame(height: 100)
                 .frame(maxWidth: .infinity)
             }
