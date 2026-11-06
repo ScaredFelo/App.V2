@@ -16,9 +16,6 @@ final class HealthKitManager: NSObject, ObservableObject, HKWorkoutSessionDelega
     private var anchor: HKQueryAnchor?
     private var workoutSession: HKWorkoutSession?
     private var wantsWorkoutSession = false
-    private var latestSampleBPM = 0
-    private var latestSampleDate: Date?
-    private var bpmHeartbeatCancellable: AnyCancellable?
 
     private var bpmUnit: HKUnit {
         HKUnit.count().unitDivided(by: HKUnit.minute())
@@ -108,8 +105,6 @@ final class HealthKitManager: NSObject, ObservableObject, HKWorkoutSessionDelega
     func startHeartRateQuery() {
         guard heartRateQuery == nil, let heartRateType else { return }
 
-        startBPMHeartbeat()
-
         healthStore.enableBackgroundDelivery(for: heartRateType, frequency: .immediate) { success, error in
             if let error {
                 print("HealthKit error en background delivery: \(error.localizedDescription)")
@@ -142,8 +137,6 @@ final class HealthKitManager: NSObject, ObservableObject, HKWorkoutSessionDelega
     }
 
     func stopHeartRateQuery() {
-        stopBPMHeartbeat()
-
         if let query = heartRateQuery {
             healthStore.stop(query)
             heartRateQuery = nil
@@ -154,43 +147,7 @@ final class HealthKitManager: NSObject, ObservableObject, HKWorkoutSessionDelega
         }
 
         anchor = nil
-        latestSampleBPM = 0
-        latestSampleDate = nil
         currentBPM = 0
-    }
-
-    // MARK: - Heart Rate Publishing
-
-    private func startBPMHeartbeat() {
-        guard bpmHeartbeatCancellable == nil else { return }
-
-        bpmHeartbeatCancellable = Timer.publish(every: 0.25, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.publishLatestBPMIfRecent()
-            }
-    }
-
-    private func stopBPMHeartbeat() {
-        bpmHeartbeatCancellable?.cancel()
-        bpmHeartbeatCancellable = nil
-    }
-
-    private func publishLatestBPMIfRecent() {
-        guard latestSampleBPM > 0, let latestSampleDate else { return }
-        guard Date().timeIntervalSince(latestSampleDate) <= 5 else { return }
-
-        publishBPM(latestSampleBPM)
-    }
-
-    private func publishBPM(_ bpm: Int) {
-        let value = max(0, bpm)
-
-        if currentBPM != value {
-            currentBPM = value
-        }
-
-        LiveActivityManager.shared.setBPM(value)
     }
 
     // MARK: - Workout Session
@@ -289,11 +246,10 @@ final class HealthKitManager: NSObject, ObservableObject, HKWorkoutSessionDelega
 
             guard let bpm, bpm > 0, let sourceName else { return }
 
-            self.latestSampleBPM = bpm
-            self.latestSampleDate = Date()
+            self.currentBPM = bpm
             self.dataSourceName = sourceName
             self.debugMessage = "Leyendo pulsaciones de \(sourceName)"
-            self.publishBPM(bpm)
+            LiveActivityManager.shared.setBPM(bpm)
         }
     }
 }

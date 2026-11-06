@@ -818,36 +818,28 @@ struct SetRowView: View {
                 }
 
             // Reps Input
-            VStack(spacing: 2) {
-                TextField(targetRepsMax > 0 ? "\(targetRepsMax)" : "0", text: $repsString)
-                    .keyboardType(.numberPad)
-                    .multilineTextAlignment(.center)
-                    .font(.subheadline)
-                    .padding(6)
-                    .background(Color(.systemGray6).opacity(0.3))
-                    .cornerRadius(8)
-                    .frame(width: 50, height: 32)
-                    .onChange(of: repsString) { _, newValue in
-                        if let r = Int(newValue) {
-                            onUpdate(set.weight, r)
-                        }
+            TextField(targetRepsMax > 0 ? "\(targetRepsMax)" : "0", text: $repsString)
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.center)
+                .font(.subheadline)
+                .padding(6)
+                .background(Color(.systemGray6).opacity(0.3))
+                .cornerRadius(8)
+                .frame(width: 50, height: 32)
+                .onChange(of: repsString) { _, newValue in
+                    if let r = Int(newValue) {
+                        onUpdate(set.weight, r)
                     }
-
-                Text("obj. \(targetRepsMin)-\(targetRepsMax)")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .frame(width: 50)
+                }
 
             // Checkmark Button
             Button(action: onToggle) {
                 Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.subheadline)
                     .foregroundStyle(set.isCompleted ? .green : .gray)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 28, height: 28)
             }
-            .frame(width: 32, height: 32)
+            .frame(width: 34, height: 32)
             .accessibilityLabel(set.isCompleted ? "Serie completada" : "Marcar serie como completada")
         }
         .padding(.horizontal, 6)
