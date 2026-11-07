@@ -366,7 +366,7 @@ public struct ActiveWorkoutView: View {
                     restTimerProgressView
 
                     // MARK: - Gráfica BPM (visible durante todo el entrenamiento)
-                    BigPictureBPMChartView(bpmHistory: viewModel.bpmHistory)
+                    BigPictureBPMChartView(bpmHistory: viewModel.bpmHistoryLast3Minutes)
 
                     // MARK: - Parrilla de series (historial vs nueva marca)
                     BigPictureSetsGridView(
@@ -1062,10 +1062,7 @@ struct BigPictureBPMChartView: View {
                 .foregroundStyle(.secondary)
 
             TimelineView(.periodic(from: .now, by: 1.0)) { timeline in
-                let cutoff: Date = timeline.date.addingTimeInterval(-180)
-                let points: [ActiveWorkoutViewModel.BPMDataPoint] = bpmHistory.filter {
-                    $0.timestamp >= cutoff && $0.timestamp <= timeline.date
-                }
+                let points = bpmHistory
 
                 if points.isEmpty {
                     Text("Esperando datos de frecuencia cardíaca...")

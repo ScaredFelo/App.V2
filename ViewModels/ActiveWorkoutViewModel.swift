@@ -1196,6 +1196,16 @@ public final class ActiveWorkoutViewModel {
     private let bpmHistoryWindow: TimeInterval = 180
     private var lastBPMPersistDate: Date = .distantPast
 
+    /// Historial de BPM filtrado a los últimos 3 minutos respecto al instante actual.
+    /// Tipos de retorno explícitos para evitar fallos de inferencia en el chart.
+    public var bpmHistoryLast3Minutes: [BPMDataPoint] {
+        let now: Date = Date()
+        let threeMinutesAgo: Date = now.addingTimeInterval(-180.0)
+        return bpmHistory.filter { (sample: BPMDataPoint) -> Bool in
+            return sample.timestamp >= threeMinutesAgo
+        }
+    }
+
     public func addBPMPoint(_ bpm: Int) {
         guard bpm > 0 else { return }
 
