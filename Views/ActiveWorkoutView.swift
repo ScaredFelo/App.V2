@@ -339,234 +339,328 @@ public struct ActiveWorkoutView: View {
 
             ScrollView {
                 VStack(spacing: 12) {
-                // Barra superior: cancelar + nombre rutina
-                HStack {
-                    Button {
-                        showingBigPictureCancelConfirmation = true
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(.white)
-                    }
-                    .padding(.top, 6)
-                    .padding(.leading, 6)
+                    // Barra superior: cancelar + nombre rutina
+                    bigPictureTopBar
 
-                    Spacer()
+                    // MARK: - Header BPM
+                    headerBPMView
 
-                    Text(viewModel.routine.name)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                        .padding(.top, 6)
+                    // MARK: - Ejercicio actual, rango objetivo y siguiente
+                    exerciseTitleView
+
+                    // MARK: - Peso y repeticiones
+                    weightAndRepsControlView
+
+                    // MARK: - Temporizador integrado o botón registrar serie
+                    restTimerProgressView
+
+                    // MARK: - Gráfica BPM (visible durante todo el entrenamiento)
+                    bpmChartView
+
+                    // MARK: - Parrilla de series (historial vs nueva marca)
+                    setsGridView
+
+                    Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+            }
+        }
+    }
 
-                // MARK: - Header BPM
-                HStack {
-                    Spacer()
-                    HStack(spacing: 8) {
-                        Image(systemName: "heart.fill")
-                            .font(.title2)
-                            .foregroundStyle(.red)
-                        Text("\(Int(healthKitManager.currentBPM)) BPM")
-                            .font(.title2.bold())
-                            .foregroundStyle(.red)
-                            .contentTransition(.numericText())
+    /// Relleno superior (cerrar + nombre de rutina).
+    @ViewBuilder
+    private var bigPictureTopBar: some View {
+        HStack {
+            Button {
+                showingBigPictureCancelConfirmation = true
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.white)
+            }
+            .padding(.top, 6)
+            .padding(.leading, 6)
+
+            Spacer()
+
+            Text(viewModel.routine.name)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .padding(.top, 6)
+        }
+        .padding(.horizontal, 20)
+    }
+
+    /// Encabezado de pulsaciones (BPM).
+    @ViewBuilder
+    private var headerBPMView: some View {
+        HStack {
+            Spacer()
+            HStack(spacing: 8) {
+                Image(systemName: "heart.fill")
+                    .font(.title2)
+                    .foregroundStyle(.red)
+                Text("\(Int(healthKitManager.currentBPM)) BPM")
+                    .font(.title2.bold())
+                    .foregroundStyle(.red)
+                    .contentTransition(.numericText())
+            }
+        }
+        .padding(.top, 2)
+        .padding(.horizontal, 24)
+    }
+
+    /// Título del ejercicio, rango objetivo en verde y siguiente ejercicio.
+    @ViewBuilder
+    private var exerciseTitleView: some View {
+        VStack(spacing: 4) {
+            Text(viewModel.bigPictureCurrentExercise)
+                .font(.title2.bold())
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+
+            if let routineExercise = viewModel.bigPictureCurrentRoutineExercise {
+                Text("\(routineExercise.targetRepsMin) - \(routineExercise.targetRepsMax) reps")
+                    .font(.subheadline.bold())
+                    .foregroundColor(.green)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+
+            if !viewModel.bigPictureNextExercise.isEmpty {
+                Text(viewModel.bigPictureNextExercise)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+        }
+        .padding(.horizontal, 24)
+    }
+
+    /// Control de peso interactivo (TextField decimalPad) y repeticiones centradas.
+    @ViewBuilder
+    private var weightAndRepsControlView: some View {
+        VStack(spacing: 12) {
+            // MARK: - Peso central con teclado numérico directo
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                TextField("0", text: $weightInput)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .font(.system(size: 72, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .tint(.white)
+                    .focused($isWeightFieldFocused)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(minWidth: 100, alignment: .trailing)
+                    .onChange(of: weightInput) { _, newValue in
+                        guard isWeightFieldFocused else { return }
+                        let normalized = newValue.replacingOccurrences(of: ",", with: ".")
+                        guard let value = Double(normalized) else { return }
+                        viewModel.bigPictureUpdateWeight(value, modelContext: modelContext)
                     }
-                }
-                .padding(.top, 2)
-                .padding(.horizontal, 24)
+                    .onSubmit { isWeightFieldFocused = false }
+                    .accessibilityLabel("Peso actual. Toca para editar.")
 
-                // MARK: - Ejercicio actual, rango objetivo y siguiente (jerarquía de títulos)
-                VStack(spacing: 4) {
-                    Text(viewModel.bigPictureCurrentExercise)
-                        .font(.title2.bold())
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-
-                    if let routineExercise = viewModel.bigPictureCurrentRoutineExercise {
-                        Text("\(routineExercise.targetRepsMin) - \(routineExercise.targetRepsMax) reps")
-                            .font(.subheadline.bold())
-                            .foregroundColor(.green)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
-                    }
-
-                    if !viewModel.bigPictureNextExercise.isEmpty {
-                        Text(viewModel.bigPictureNextExercise)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
-                    }
-                }
-                .padding(.horizontal, 24)
-
-                // MARK: - Peso central con teclado numérico directo
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    TextField("0", text: $weightInput)
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                        .font(.system(size: 72, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .tint(.white)
-                        .focused($isWeightFieldFocused)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .frame(minWidth: 100, alignment: .trailing)
-                        .onChange(of: weightInput) { _, newValue in
-                            guard isWeightFieldFocused else { return }
-                            let normalized = newValue.replacingOccurrences(of: ",", with: ".")
-                            guard let value = Double(normalized) else { return }
-                            viewModel.bigPictureUpdateWeight(value, modelContext: modelContext)
-                        }
-                        .onSubmit { isWeightFieldFocused = false }
-                        .accessibilityLabel("Peso actual. Toca para editar.")
-
-                    Text("kg")
-                        .font(.system(size: 34, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
-                .onAppear { syncWeightInput(force: true) }
-                .onChange(of: viewModel.bigPictureCurrentExerciseID) { _, _ in
+                Text("kg")
+                    .font(.system(size: 34, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+            .onAppear { syncWeightInput(force: true) }
+            .onChange(of: viewModel.bigPictureCurrentExerciseID) { _, _ in
+                syncWeightInput(force: true)
+            }
+            .onChange(of: viewModel.bigPictureCurrentWeight) { _, _ in
+                syncWeightInput()
+            }
+            .onChange(of: isWeightFieldFocused) { _, isFocused in
+                if !isFocused {
                     syncWeightInput(force: true)
                 }
-                .onChange(of: viewModel.bigPictureCurrentWeight) { _, _ in
-                    syncWeightInput()
-                }
-                .onChange(of: isWeightFieldFocused) { _, isFocused in
-                    if !isFocused {
-                        syncWeightInput(force: true)
-                    }
-                }
+            }
 
-                // MARK: - Repeticiones (centrado y compacto)
-                HStack(spacing: 16) {
-                    Button {
-                        viewModel.bigPictureAdjustReps(-1)
-                    } label: {
-                        Image(systemName: "minus.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(.white)
-                            .frame(width: 36, height: 36)
-                            .background(Color.white.opacity(0.15))
-                            .clipShape(Circle())
-                    }
-
-                    VStack(spacing: 2) {
-                        Text("\(viewModel.bigPictureCurrentReps)")
-                            .font(.system(size: 60, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-
-                        Text("REPS")
-                            .font(.caption2.bold())
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button {
-                        viewModel.bigPictureAdjustReps(1)
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(.white)
-                            .frame(width: 36, height: 36)
-                            .background(Color.white.opacity(0.15))
-                            .clipShape(Circle())
-                    }
-                }
-                .frame(maxWidth: .infinity)
-
-                // MARK: - Temporizador integrado o botón registrar serie
-                if viewModel.bigPictureIsTimerShowing {
-                    bigPictureTimerBar
-                    bigPictureTimerControls
-                } else {
-                    Button {
-                        viewModel.bigPictureRegisterSet(modelContext: modelContext)
-                    } label: {
-                        Text("REGISTRAR SERIE")
-                            .font(.title2.bold())
-                            .foregroundStyle(.black)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(Color.white)
-                            .cornerRadius(14)
-                    }
-                    .padding(.horizontal, 32)
-                    .padding(.bottom, 8)
+            // MARK: - Repeticiones (centrado y compacto)
+            HStack(spacing: 16) {
+                Button {
+                    viewModel.bigPictureAdjustReps(-1)
+                } label: {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(Color.white.opacity(0.15))
+                        .clipShape(Circle())
                 }
 
-                // MARK: - Gráfica BPM (visible durante todo el entrenamiento)
-                bigPictureBPMChart
-
-                // MARK: - Parrilla de series (historial vs nueva marca)
-                let setRows = viewModel.bigPictureSetRows(modelContext: modelContext)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("SERIES PASADAS (\(viewModel.bigPictureCurrentExercise))")
-                        .font(.headline.bold())
+                VStack(spacing: 2) {
+                    Text("\(viewModel.bigPictureCurrentReps)")
+                        .font(.system(size: 60, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
 
-                    if setRows.isEmpty {
-                        Text("Sin series registradas")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        let columns = [
-                            GridItem(.flexible(), spacing: 12),
-                            GridItem(.flexible(), spacing: 12),
-                            GridItem(.flexible(), spacing: 12)
-                        ]
+                    Text("REPS")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                }
 
-                        LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
-                            // Cabecera
-                            Text("Serie")
-                                .font(.caption2.bold())
-                                .foregroundStyle(.secondary)
-                            Text("Última Sesión")
-                                .font(.caption2.bold())
-                                .foregroundStyle(.secondary)
-                            Text("Nueva Marca")
-                                .font(.caption2.bold())
-                                .foregroundStyle(.secondary)
+                Button {
+                    viewModel.bigPictureAdjustReps(1)
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(Color.white.opacity(0.15))
+                        .clipShape(Circle())
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
 
-                            ForEach(setRows) { row in
-                                Text("Serie \(row.setNumber)")
-                                    .font(.caption2.bold())
-                                    .foregroundStyle(.white)
+    /// Barra de descanso con temporizador centrado y botones de pausa/saltar,
+    /// o botón "Registrar serie" cuando no hay descanso activo.
+    @ViewBuilder
+    private var restTimerProgressView: some View {
+        if viewModel.bigPictureIsTimerShowing {
+            bigPictureTimerBar
+            bigPictureTimerControls
+        } else {
+            Button {
+                viewModel.bigPictureRegisterSet(modelContext: modelContext)
+            } label: {
+                Text("REGISTRAR SERIE")
+                    .font(.title2.bold())
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.white)
+                    .cornerRadius(14)
+            }
+            .padding(.horizontal, 32)
+            .padding(.bottom, 8)
+        }
+    }
 
-                                if let previous = row.previousText {
-                                    Text(previous)
-                                        .font(.caption2)
-                                        .foregroundStyle(.white.opacity(0.85))
-                                } else {
-                                    Text("-")
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary.opacity(0.6))
-                                }
+    /// Gráfica de BPM con ventana deslizante de 3 minutos.
+    @ViewBuilder
+    private var bpmChartView: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("PULSACIONES · ÚLTIMOS 3 MIN")
+                .font(.caption2.bold())
+                .foregroundStyle(.secondary)
 
-                                if let current = row.currentText {
-                                    Text(current)
-                                        .font(.caption2.bold())
-                                        .foregroundColor(.green)
-                                } else {
-                                    Text("-")
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary.opacity(0.4))
-                                }
-                            }
-                        }
+            TimelineView(.periodic(from: .now, by: 1.0)) { timeline in
+                let points = viewModel.bpmPoints(within: 180, relativeTo: timeline.date)
+
+                if points.isEmpty {
+                    Text("Esperando datos de frecuencia cardíaca...")
+                        .font(.caption)
+                        .foregroundStyle(.secondary.opacity(0.7))
+                        .frame(height: 100)
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Chart(points) { sample in
+                        LineMark(
+                            x: .value("Tiempo", sample.timestamp),
+                            y: .value("BPM", sample.bpm)
+                        )
+                        .foregroundStyle(Color.red)
+                        .interpolationMethod(.catmullRom)
+
+                        PointMark(
+                            x: .value("Tiempo", sample.timestamp),
+                            y: .value("BPM", sample.bpm)
+                        )
+                        .foregroundStyle(Color.red)
+                    }
+                    .chartXScale(domain: timeline.date.addingTimeInterval(-180)...timeline.date)
+                    .chartYScale(domain: 40...200)
+                    .frame(height: 100)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 4)
+    }
+
+    /// Parrilla de 3 columnas: Serie | Última Sesión | Nueva Marca.
+    @ViewBuilder
+    private var setsGridView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("SERIES PASADAS (\(viewModel.bigPictureCurrentExercise))")
+                .font(.headline.bold())
+                .foregroundStyle(.white)
+
+            if setRows.isEmpty {
+                Text("Sin series registradas")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                let columns = [
+                    GridItem(.flexible(), spacing: 12),
+                    GridItem(.flexible(), spacing: 12),
+                    GridItem(.flexible(), spacing: 12)
+                ]
+
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                    // Cabecera
+                    Text("Serie")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                    Text("Última Sesión")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                    Text("Nueva Marca")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+
+                    ForEach(setRows) { row in
+                        setRowView(row)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 24)
-
-                Spacer(minLength: 0)
             }
-            .padding(.bottom, 16)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 24)
+    }
+
+    /// Filas de datos de la parrilla de series.
+    private var setRows: [ActiveWorkoutViewModel.BigPictureSetRow] {
+        viewModel.bigPictureSetRows(modelContext: modelContext)
+    }
+
+    /// Una celda de la parrilla (Serie / Última Sesión / Nueva Marca).
+    @ViewBuilder
+    private func setRowView(_ row: ActiveWorkoutViewModel.BigPictureSetRow) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Serie \(row.setNumber)")
+                .font(.caption2.bold())
+                .foregroundStyle(.white)
+
+            if let previous = row.previousText {
+                Text(previous)
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.85))
+            } else {
+                Text("-")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary.opacity(0.6))
+            }
+
+            if let current = row.currentText {
+                Text(current)
+                    .font(.caption2.bold())
+                    .foregroundColor(.green)
+            } else {
+                Text("-")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary.opacity(0.4))
             }
         }
     }
@@ -584,7 +678,7 @@ public struct ActiveWorkoutView: View {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(Color.white)
                         .frame(
-                            width: max(0, barWidth * viewModel.bigPictureRestProgress),
+                            width: max(0, barWidth * CGFloat(viewModel.bigPictureRestProgress)),
                             height: 36
                         )
                         .animation(.linear(duration: 1.0), value: viewModel.bigPictureRestProgress)
@@ -645,46 +739,7 @@ public struct ActiveWorkoutView: View {
         .padding(.bottom, 6)
     }
 
-    private var bigPictureBPMChart: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("PULSACIONES · ÚLTIMOS 3 MIN")
-                .font(.caption2.bold())
-                .foregroundStyle(.secondary)
 
-            TimelineView(.periodic(from: .now, by: 1.0)) { timeline in
-                let points = viewModel.bpmPoints(within: 180, relativeTo: timeline.date)
-
-                if points.isEmpty {
-                    Text("Esperando datos de frecuencia cardíaca...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary.opacity(0.7))
-                        .frame(height: 100)
-                        .frame(maxWidth: .infinity)
-                } else {
-                    Chart(points) { sample in
-                        LineMark(
-                            x: .value("Tiempo", sample.timestamp),
-                            y: .value("BPM", sample.bpm)
-                        )
-                        .foregroundStyle(Color.red)
-                        .interpolationMethod(.catmullRom)
-
-                        PointMark(
-                            x: .value("Tiempo", sample.timestamp),
-                            y: .value("BPM", sample.bpm)
-                        )
-                        .foregroundStyle(Color.red)
-                    }
-                    .chartXScale(domain: timeline.date.addingTimeInterval(-180)...timeline.date)
-                    .chartYScale(domain: 40...200)
-                    .frame(height: 100)
-                    .frame(maxWidth: .infinity)
-                }
-            }
-        }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 4)
-    }
 
     /// Sincroniza el texto del peso con la serie pendiente actual. No pisa lo
     /// que el usuario está escribiendo mientras el campo tiene el foco.
