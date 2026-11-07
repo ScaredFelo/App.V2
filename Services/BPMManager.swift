@@ -168,6 +168,7 @@ final class BPMManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
                 self.currentBPM = bpm
                 self.isConnected = true
                 self.statusText = "\(bpm) BPM"
+                LiveActivityManager.shared.setBPM(bpm)
             }
         }
     }

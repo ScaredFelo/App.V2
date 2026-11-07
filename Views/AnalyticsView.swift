@@ -87,7 +87,13 @@ public struct AnalyticsView: View {
         let calendar = Calendar.current
         let oneWeekAgo = calendar.date(byAdding: .day, value: -7, to: Date()) ?? Date()
 
-        let recentSets = sets.filter { $0.date >= oneWeekAgo && $0.isCompleted }
+        // La serie computa en la fecha en la que empezó la rutina, no en la
+        // fecha/hora exacta en la que se marcó (puede ser pasada la medianoche).
+        let recentSets = sets.filter { setLog in
+            guard setLog.isCompleted else { return false }
+            let logDate = setLog.workoutStartDate ?? setLog.session?.startDate ?? setLog.date
+            return logDate >= oneWeekAgo
+        }
         var counts: [String: Int] = [:]
 
         for setLog in recentSets {

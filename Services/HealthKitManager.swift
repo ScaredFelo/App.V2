@@ -16,6 +16,8 @@ final class HealthKitManager: NSObject, ObservableObject, HKWorkoutSessionDelega
     private var anchor: HKQueryAnchor?
     private var workoutSession: HKWorkoutSession?
     private var wantsWorkoutSession = false
+    private var workoutSessionRetryCount = 0
+    private static let maxWorkoutSessionRetries = 10
 
     private var bpmUnit: HKUnit {
         HKUnit.count().unitDivided(by: HKUnit.minute())
@@ -154,6 +156,7 @@ final class HealthKitManager: NSObject, ObservableObject, HKWorkoutSessionDelega
 
     func startWorkoutSession() {
         wantsWorkoutSession = true
+        workoutSessionRetryCount = 0
         startWorkoutSessionIfAvailable()
     }
 
@@ -169,15 +172,18 @@ final class HealthKitManager: NSObject, ObservableObject, HKWorkoutSessionDelega
 
     private func startWorkoutSessionIfAvailable() {
         guard wantsWorkoutSession, workoutSession == nil else { return }
+        guard HKHealthStore.isHealthDataAvailable() else { return }
 
-        #if compiler(>=6.2)
+        // La creación de sesiones de entrenamiento desde el iPhone solo está
+        // disponible a partir de iOS 26. En versiones anteriores no hay forma
+        // de mantener una HKWorkoutSession propia, así que no reintentamos.
         guard #available(iOS 26.0, *) else {
-            debugMessage = "Workout session nativa disponible desde iOS 26"
+            wantsWorkoutSession = false
+            debugMessage = "La sesión nativa de entrenamiento requiere iOS 26 o superior"
             return
         }
 
-        guard HKHealthStore.isHealthDataAvailable() else { return }
-
+        #if compiler(>=6.2)
         do {
             let configuration = HKWorkoutConfiguration()
             configuration.activityType = .traditionalStrengthTraining
@@ -189,6 +195,7 @@ final class HealthKitManager: NSObject, ObservableObject, HKWorkoutSessionDelega
             )
             session.delegate = self
             workoutSession = session
+            workoutSessionRetryCount = 0
             session.prepare()
             session.startActivity(with: Date())
             debugMessage = "Sesión de entrenamiento HealthKit activa"
@@ -196,10 +203,24 @@ final class HealthKitManager: NSObject, ObservableObject, HKWorkoutSessionDelega
             workoutSession = nil
             debugMessage = "No se pudo iniciar la sesión de entrenamiento: \(error.localizedDescription)"
             print("[HealthKit] Error al iniciar HKWorkoutSession: \(error.localizedDescription)")
+            scheduleWorkoutSessionRetry()
         }
         #else
-        debugMessage = "Workout session nativa no disponible en este SDK"
+        wantsWorkoutSession = false
+        debugMessage = "La sesión de entrenamiento nativa no está disponible en este SDK"
         #endif
+    }
+
+    /// Mantiene la sesión de HealthKit viva durante todo el entrenamiento.
+    /// Si iOS la finaliza o falla, la recreamos mientras el entrenamiento siga activo.
+    private func scheduleWorkoutSessionRetry() {
+        guard wantsWorkoutSession, workoutSessionRetryCount < Self.maxWorkoutSessionRetries else { return }
+
+        workoutSessionRetryCount += 1
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let self, self.wantsWorkoutSession, self.workoutSession == nil else { return }
+            self.startWorkoutSessionIfAvailable()
+        }
     }
 
     func workoutSession(
@@ -208,11 +229,18 @@ final class HealthKitManager: NSObject, ObservableObject, HKWorkoutSessionDelega
         from fromState: HKWorkoutSessionState,
         date: Date
     ) {
-        guard toState == .ended || toState == .stopped else { return }
-
         DispatchQueue.main.async { [weak self] in
             guard let self, self.workoutSession === workoutSession else { return }
-            self.workoutSession = nil
+
+            switch toState {
+            case .ended, .stopped:
+                self.workoutSession = nil
+                if self.wantsWorkoutSession {
+                    self.scheduleWorkoutSessionRetry()
+                }
+            default:
+                break
+            }
         }
     }
 
@@ -222,6 +250,8 @@ final class HealthKitManager: NSObject, ObservableObject, HKWorkoutSessionDelega
         DispatchQueue.main.async { [weak self] in
             guard let self, self.workoutSession === workoutSession else { return }
             self.workoutSession = nil
+            self.debugMessage = "Sesión de entrenamiento interrumpida; reintentando..."
+            self.scheduleWorkoutSessionRetry()
         }
     }
 

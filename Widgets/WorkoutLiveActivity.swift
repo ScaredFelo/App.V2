@@ -133,14 +133,43 @@ struct WorkoutLiveActivity: Widget {
         }
     }
 
+    @ViewBuilder
     private func minimalTimer(_ context: ActivityViewContext<WorkoutActivityAttributes>) -> some View {
-        HStack(spacing: 2) {
-            Image(systemName: "stopwatch.fill")
-                .foregroundStyle(.orange)
+        if context.state.isRestTimerActive,
+           let startDate = context.state.timerStartDate,
+           let endDate = context.state.timerEndDate,
+           endDate > startDate {
+            ZStack {
+                // Anillo de progreso que consume su perímetro con el tiempo.
+                ProgressView(timerInterval: startDate...endDate, countsDown: true)
+                    .progressViewStyle(.circular)
+                    .tint(.green)
+                    .labelsHidden()
 
-            timerText(context, font: .caption2.bold())
-                .lineLimit(1)
-                .minimumScaleFactor(0.55)
+                // Cifra ultra-compacta dentro del anillo.
+                Text(endDate, style: .timer)
+                    .font(.system(size: 8, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.green)
+                    .minimumScaleFactor(0.45)
+                    .lineLimit(1)
+                    .padding(.horizontal, 3)
+            }
+            .frame(width: 28, height: 28)
+        } else {
+            ZStack {
+                Circle()
+                    .stroke(Color.green.opacity(0.35), lineWidth: 3)
+
+                Circle()
+                    .trim(from: 0, to: 1)
+                    .stroke(
+                        Color.green,
+                        style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+            }
+            .frame(width: 28, height: 28)
         }
     }
 

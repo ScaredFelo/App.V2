@@ -7,7 +7,6 @@ public final class Exercise {
     public var name: String
     public var muscleGroupRaw: String
     public var equipmentTypeRaw: String
-    public var weightTypeRaw: String?
     public var requiresStraps: Bool
     public var targetRepsMin: Int = 8
     public var targetRepsMax: Int = 12
@@ -26,18 +25,6 @@ public final class Exercise {
     public var equipmentType: EquipmentType {
         get { EquipmentType(rawValue: equipmentTypeRaw) ?? .mancuernas }
         set { equipmentTypeRaw = newValue.rawValue }
-    }
-
-    @Transient
-    public var weightType: WeightType {
-        get {
-            guard let weightTypeRaw = weightTypeRaw,
-                  let type = WeightType(rawValue: weightTypeRaw) else {
-                return WeightType.defaultFor(equipmentType)
-            }
-            return type
-        }
-        set { weightTypeRaw = newValue.rawValue }
     }
 
     @Transient
@@ -60,7 +47,6 @@ public final class Exercise {
         name: String,
         muscleGroup: MuscleGroup,
         equipmentType: EquipmentType,
-        weightType: WeightType? = nil,
         requiresStraps: Bool = false,
         targetRepsMin: Int = 8,
         targetRepsMax: Int = 12,
@@ -70,7 +56,6 @@ public final class Exercise {
         self.name = name
         self.muscleGroupRaw = muscleGroup.rawValue
         self.equipmentTypeRaw = equipmentType.rawValue
-        self.weightTypeRaw = (weightType ?? WeightType.defaultFor(equipmentType)).rawValue
         self.requiresStraps = requiresStraps
         let lower = max(1, min(targetRepsMin, targetRepsMax))
         self.targetRepsMin = lower

@@ -72,6 +72,11 @@ public final class ActiveWorkoutViewModel {
         setupInitialSets(modelContext: modelContext)
         captureOriginalStructure()
         HealthKitManager.shared.requestAuthorization()
+        let hasStoredStateForSession = ActiveWorkoutStateStore.load()?.activeWorkoutID == session.id
+        restorePersistedStateIfNeeded()
+        if !hasStoredStateForSession {
+            persistState()
+        }
     }
 
     // MARK: - Exercise Structure
@@ -148,6 +153,7 @@ public final class ActiveWorkoutViewModel {
         addedRoutineExerciseIDs.insert(routineExercise.id)
         structureVersion += 1
         try? modelContext.save()
+        persistState()
 
         return routineExercise
     }
@@ -168,6 +174,7 @@ public final class ActiveWorkoutViewModel {
         normalizeSortOrder()
         structureVersion += 1
         try? modelContext.save()
+        persistState()
     }
 
     private func normalizeSortOrder() {
@@ -269,6 +276,7 @@ public final class ActiveWorkoutViewModel {
 
             let log = WorkoutSetLog(
                 date: Date(),
+                workoutStartDate: session.startDate,
                 weight: targetSet.weight,
                 reps: targetSet.reps,
                 targetRepsMin: routineExercise?.targetRepsMin ?? 8,
@@ -317,6 +325,7 @@ public final class ActiveWorkoutViewModel {
         }
 
         refreshLiveActivity()
+        persistState()
     }
 
     public func updateSetValues(
@@ -349,19 +358,27 @@ public final class ActiveWorkoutViewModel {
         }
 
         activeSets[routineExerciseID] = sets
+        persistState()
     }
 
     // MARK: - Scene Phase
 
     public func handleScenePhaseBackground(modelContext: ModelContext) {
         try? modelContext.save()
+        persistState()
+        LiveActivityManager.shared.handleScenePhaseBackground()
 
         guard isResting, !isRestPaused else { return }
         updateRestRemainingFromClock()
     }
 
     public func handleScenePhaseActive() {
-        guard isResting, !isRestPaused, !isRestFinishing else { return }
+        LiveActivityManager.shared.handleScenePhaseActive()
+
+        guard isResting, !isRestPaused, !isRestFinishing else {
+            refreshLiveActivity()
+            return
+        }
 
         if isRestTimerActive, let endDate = restTimerEndDate {
             let remaining = endDate.timeIntervalSinceNow
@@ -377,6 +394,8 @@ public final class ActiveWorkoutViewModel {
         if let condition = currentRestCondition, case .bpmDrop(let targetBpm) = condition {
             startBpmRecoveryObserver(targetBpm: targetBpm)
         }
+
+        refreshLiveActivity()
     }
 
     // MARK: - Rest Timer & BPM Drop Logic
@@ -416,6 +435,7 @@ public final class ActiveWorkoutViewModel {
         }
 
         refreshLiveActivity()
+        persistState()
     }
 
     private func startTimerCountdown() {
@@ -482,6 +502,7 @@ public final class ActiveWorkoutViewModel {
         }
 
         refreshLiveActivity()
+        persistState()
     }
 
     public func sub10Seconds() {
@@ -518,6 +539,7 @@ public final class ActiveWorkoutViewModel {
         if !isRestFinishing {
             refreshLiveActivity()
         }
+        persistState()
     }
 
     public func pauseRest() {
@@ -539,6 +561,7 @@ public final class ActiveWorkoutViewModel {
         restTimerEndDate = nil
         isRestTimerActive = false
         refreshLiveActivity()
+        persistState()
     }
 
     public func resumeRest() {
@@ -568,6 +591,7 @@ public final class ActiveWorkoutViewModel {
         }
 
         refreshLiveActivity()
+        persistState()
     }
 
     private func updateRestRemainingFromClock() {
@@ -612,6 +636,7 @@ public final class ActiveWorkoutViewModel {
         isRestTimerActive = false
         NotificationManager.shared.cancelRestFinishedNotification()
         refreshLiveActivity()
+        persistState()
 
         restDismissalTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 260_000_000)
@@ -643,6 +668,114 @@ public final class ActiveWorkoutViewModel {
         restTimerEndDate = nil
         isRestTimerActive = false
         currentRestCondition = nil
+        persistState()
+    }
+
+    // MARK: - Persistencia de la sesión
+
+    /// Guarda en `UserDefaults` el estado completo de la rutina activa para
+    /// poder restaurarla tal cual si el usuario cierra la app por completo.
+    public func persistState() {
+        guard session.endDate == nil else {
+            ActiveWorkoutStateStore.clear()
+            return
+        }
+
+        let completedSets: [PersistedWorkoutSet] = activeSets.flatMap { entry in
+            entry.value.compactMap { set in
+                guard set.isCompleted else { return nil }
+                return PersistedWorkoutSet(
+                    routineExerciseID: entry.key,
+                    setNumber: set.setNumber,
+                    weight: set.weight,
+                    reps: set.reps,
+                    date: set.existingLog?.date ?? Date()
+                )
+            }
+        }
+
+        let state = PersistedWorkoutState(
+            activeWorkoutID: session.id,
+            routineID: routine.id,
+            workoutStartDate: session.startDate,
+            completedSets: completedSets,
+            restTimerEndDate: restTimerEndDate,
+            timerStartDate: timerStartDate,
+            totalRestSeconds: totalRestSeconds,
+            restTimeRemaining: restTimeRemaining,
+            isResting: isResting,
+            isRestPaused: isRestPaused,
+            isRestTimerActive: isRestTimerActive,
+            isTimerMinimized: isTimerMinimized,
+            restCondition: currentRestCondition,
+            restTargetBpm: restTargetBpm,
+            currentExerciseName: currentExerciseName,
+            currentRestModeTitle: currentRestModeTitle,
+            restingSetNumber: restingSetNumber,
+            restingTotalSets: restingTotalSets,
+            updatedAt: Date()
+        )
+
+        ActiveWorkoutStateStore.save(state)
+    }
+
+    private func restorePersistedStateIfNeeded() {
+        guard session.endDate == nil,
+              let state = ActiveWorkoutStateStore.load(),
+              state.activeWorkoutID == session.id,
+              state.routineID == routine.id,
+              state.isResting else { return }
+
+        currentExerciseName = state.currentExerciseName
+        currentRestModeTitle = state.currentRestModeTitle
+        restingSetNumber = state.restingSetNumber
+        restingTotalSets = state.restingTotalSets
+        totalRestSeconds = state.totalRestSeconds
+        isTimerMinimized = state.isTimerMinimized
+        restTargetBpm = state.restTargetBpm
+        currentRestCondition = state.restCondition
+
+        if currentRestCondition == nil {
+            currentRestCondition = .timer(seconds: max(1, state.totalRestSeconds))
+        }
+
+        if state.isRestPaused {
+            isResting = true
+            isRestPaused = true
+            restTimeRemaining = max(0, state.restTimeRemaining)
+            timerTargetDuration = restTimeRemaining
+            timerStartDate = nil
+            restTimerEndDate = nil
+            isRestTimerActive = false
+            return
+        }
+
+        if let condition = state.restCondition, case .bpmDrop(let targetBpm) = condition {
+            isResting = true
+            isRestPaused = false
+            restTargetBpm = targetBpm
+            timerStartDate = nil
+            timerTargetDuration = 0
+            restTimerEndDate = nil
+            isRestTimerActive = false
+            startBpmRecoveryObserver(targetBpm: targetBpm)
+            return
+        }
+
+        guard state.isRestTimerActive, let endDate = state.restTimerEndDate, endDate > Date() else {
+            return
+        }
+
+        isResting = true
+        isRestPaused = false
+        restTimerEndDate = endDate
+        timerStartDate = state.timerStartDate ?? Date()
+        isRestTimerActive = true
+        restTimeRemaining = max(0, Int(ceil(endDate.timeIntervalSinceNow)))
+        timerTargetDuration = max(state.totalRestSeconds, restTimeRemaining)
+        NotificationManager.shared.scheduleRestFinishedNotification(endingAt: endDate)
+        AudioAlertService.shared.startBackgroundAudio()
+        startTimerCountdown()
     }
 
     // MARK: - Finish / Cancel
@@ -654,6 +787,7 @@ public final class ActiveWorkoutViewModel {
         HealthKitManager.shared.stopWorkoutSession()
         HealthKitManager.shared.stopHeartRateQuery()
         session.endDate = Date()
+        ActiveWorkoutStateStore.clear()
         try? modelContext.save()
         return session
     }
@@ -705,6 +839,7 @@ public final class ActiveWorkoutViewModel {
         HealthKitManager.shared.stopHeartRateQuery()
         restoreOriginalStructure(modelContext: modelContext)
         modelContext.delete(session)
+        ActiveWorkoutStateStore.clear()
         try? modelContext.save()
     }
 
@@ -749,6 +884,7 @@ public final class ActiveWorkoutViewModel {
         NotificationManager.shared.cancelRestFinishedNotification()
         AudioAlertService.shared.stopBackgroundAudio()
         LiveActivityManager.shared.endActivity()
+        ActiveWorkoutStateStore.clear()
     }
 
     private func currentExerciseInfo() -> (name: String, currentSet: Int, totalSets: Int) {

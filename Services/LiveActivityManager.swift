@@ -27,9 +27,23 @@ final class LiveActivityManager: ObservableObject {
         isRestTimerActive: false
     )
     private var bpm = 0
+    private var isAppInBackground = false
     private let staleMargin: TimeInterval = 14_400
 
     private init() {}
+
+    // MARK: - Ciclo de vida de la app
+
+    /// La app pasa a segundo plano: conservamos intacto el estado actual de la
+    /// Live Activity (incluido `timerEndDate`) para que Dynamic Island y la
+    /// pantalla bloqueada no pierdan el temporizador.
+    func handleScenePhaseBackground() {
+        isAppInBackground = true
+    }
+
+    func handleScenePhaseActive() {
+        isAppInBackground = false
+    }
 
     func startActivity(workoutName: String, snapshot: Snapshot, bpm: Int) {
         self.snapshot = snapshot
@@ -83,7 +97,22 @@ final class LiveActivityManager: ObservableObject {
     }
 
     func updateSnapshot(_ snapshot: Snapshot, bpm: Int? = nil) {
-        self.snapshot = snapshot
+        var resolvedSnapshot = snapshot
+
+        // Nunca borramos un temporizador que sigue vigente por una actualización
+        // que llega mientras la app está en segundo plano. Si el descanso ya ha
+        // vencido, sí dejamos que la Live Activity se limpie con normalidad.
+        if isAppInBackground,
+           !resolvedSnapshot.isRestTimerActive,
+           self.snapshot.isRestTimerActive,
+           let endDate = self.snapshot.timerEndDate,
+           endDate > Date() {
+            resolvedSnapshot.timerStartDate = self.snapshot.timerStartDate
+            resolvedSnapshot.timerEndDate = endDate
+            resolvedSnapshot.isRestTimerActive = true
+        }
+
+        self.snapshot = resolvedSnapshot
         if let bpm {
             self.bpm = max(0, bpm)
         }

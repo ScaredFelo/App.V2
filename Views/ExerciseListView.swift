@@ -152,7 +152,6 @@ public struct AddExerciseView: View {
     @State private var name = ""
     @State private var muscleGroup: MuscleGroup = .pecho
     @State private var equipmentType: EquipmentType = .mancuernas
-    @State private var weightType: WeightType = .mancuernas
     @State private var requiresStraps = false
     @State private var targetRepsMin = 8
     @State private var targetRepsMax = 12
@@ -165,11 +164,6 @@ public struct AddExerciseView: View {
             Form {
                 Section("Detalles del Ejercicio") {
                     TextField("Nombre del ejercicio", text: $name)
-                    Picker("Tipo de peso", selection: $weightType) {
-                        ForEach(WeightType.allCases) { type in
-                            Text(type.rawValue).tag(type)
-                        }
-                    }
                     Picker("Grupo Muscular", selection: $muscleGroup) {
                         ForEach(MuscleGroup.allCases) { group in
                             Text(group.rawValue).tag(group)
@@ -221,7 +215,6 @@ public struct AddExerciseView: View {
                             name: name,
                             muscleGroup: muscleGroup,
                             equipmentType: equipmentType,
-                            weightType: weightType,
                             requiresStraps: requiresStraps,
                             targetRepsMin: targetRepsMin,
                             targetRepsMax: targetRepsMax,

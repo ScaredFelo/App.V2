@@ -42,6 +42,117 @@ public struct ActiveWorkoutView: View {
                 normalBody
             }
         }
+        .onAppear {
+            BPMManager.shared.startScanning()
+            viewModel.startWorkoutActivityIfNeeded()
+            viewModel.persistState()
+            viewModel.addBPMPoint(healthKitManager.currentBPM)
+        }
+        .onChange(of: healthKitManager.currentBPM) { _, newBPM in
+            viewModel.addBPMPoint(newBPM)
+        }
+        .onDisappear {
+            pendingNewRoutinePromptID = nil
+            try? modelContext.save()
+            BPMManager.shared.stopScanning()
+            HealthKitManager.shared.stopWorkoutSession()
+            HealthKitManager.shared.stopHeartRateQuery()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .active:
+                viewModel.handleScenePhaseActive()
+            case .inactive:
+                try? modelContext.save()
+            case .background:
+                viewModel.handleScenePhaseBackground(modelContext: modelContext)
+            @unknown default:
+                break
+            }
+        }
+        .navigationBarHidden(true)
+        .interactiveDismissDisabled(true)
+        .sheet(isPresented: $showingExercisePicker) {
+            ExercisePickerView { exercise in
+                _ = viewModel.addExercise(exercise, modelContext: modelContext)
+            }
+        }
+        .alert("¿Guardar cambios?", isPresented: $showingRoutineChangeOptions) {
+            Button("Reemplazar rutina actual", role: .destructive) {
+                _ = viewModel.finishWorkoutReplacingRoutine(modelContext: modelContext)
+                dismiss()
+            }
+            Button("Guardar como nueva rutina") {
+                newRoutineName = "\(viewModel.routine.name) (modificada)"
+                let promptID = UUID()
+                pendingNewRoutinePromptID = promptID
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    guard pendingNewRoutinePromptID == promptID else { return }
+                    showingNewRoutineNameAlert = true
+                }
+            }
+            Button("Guardar solo el historial de hoy") {
+                _ = viewModel.finishWorkoutHistoryOnly(modelContext: modelContext)
+                dismiss()
+            }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("Has añadido, quitado o modificado datos respecto a la rutina original. ¿Qué quieres hacer con los cambios?")
+        }
+        .alert("Nueva rutina", isPresented: $showingNewRoutineNameAlert) {
+            TextField("Nombre de la rutina", text: $newRoutineName)
+            Button("Guardar") {
+                _ = viewModel.finishWorkoutSavingAsNewRoutine(named: newRoutineName, modelContext: modelContext)
+                dismiss()
+            }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("Se guardará una copia con los cambios de hoy.")
+        }
+        .alert("¿Cancelar entrenamiento?", isPresented: $showingCancelConfirmation) {
+            Button("Cancelar entrenamiento", role: .destructive) {
+                pendingNewRoutinePromptID = nil
+                showingRoutineChangeOptions = false
+                showingNewRoutineNameAlert = false
+                viewModel.cancelWorkout(modelContext: modelContext)
+                dismiss()
+            }
+            Button("Seguir entrenando", role: .cancel) {}
+        } message: {
+            Text("Se descartará la sesión actual sin guardar el historial.")
+        }
+        .alert(
+            "Eliminar ejercicio",
+            isPresented: Binding(
+                get: { exercisePendingRemoval != nil },
+                set: { if !$0 { exercisePendingRemoval = nil } }
+            )
+        ) {
+            Button("Eliminar", role: .destructive) {
+                if let routineExercise = exercisePendingRemoval {
+                    viewModel.removeExercise(routineExercise, modelContext: modelContext)
+                }
+                exercisePendingRemoval = nil
+            }
+            Button("Cancelar", role: .cancel) { exercisePendingRemoval = nil }
+        } message: {
+            Text("El ejercicio se quitará del entrenamiento actual.")
+        }
+        .alert(
+            "¿Descartar entrenamiento?",
+            isPresented: $showingBigPictureCancelConfirmation
+        ) {
+            Button("Sí, descartar", role: .destructive) {
+                viewModel.cancelWorkout(modelContext: modelContext)
+                dismiss()
+            }
+            Button("Seguir entrenando", role: .cancel) {}
+        } message: {
+            Text("Se descartará la sesión actual sin guardar el historial.")
+        }
+        .withKeyboardDismiss()
+        .dismissKeyboardOnTap()
     }
 
     private var normalBody: some View {
@@ -218,119 +329,14 @@ public struct ActiveWorkoutView: View {
         .animation(.spring(response: 0.42, dampingFraction: 0.82), value: viewModel.isTimerMinimized)
         .animation(.easeIn(duration: 0.22), value: viewModel.isRestFinishing)
         }
-        .onAppear {
-            BPMManager.shared.startScanning()
-            viewModel.startWorkoutActivityIfNeeded()
-        }
-        .onDisappear {
-            pendingNewRoutinePromptID = nil
-            try? modelContext.save()
-            BPMManager.shared.stopScanning()
-            HealthKitManager.shared.stopWorkoutSession()
-            HealthKitManager.shared.stopHeartRateQuery()
-        }
-        .onChange(of: scenePhase) { _, newPhase in
-            switch newPhase {
-            case .active:
-                viewModel.handleScenePhaseActive()
-            case .inactive:
-                try? modelContext.save()
-            case .background:
-                viewModel.handleScenePhaseBackground(modelContext: modelContext)
-            @unknown default:
-                break
-            }
-        }
-        .navigationBarHidden(true)
-        .interactiveDismissDisabled(true)
-        .sheet(isPresented: $showingExercisePicker) {
-            ExercisePickerView { exercise in
-                _ = viewModel.addExercise(exercise, modelContext: modelContext)
-            }
-        }
-        .alert("¿Guardar cambios?", isPresented: $showingRoutineChangeOptions) {
-            Button("Reemplazar rutina actual", role: .destructive) {
-                _ = viewModel.finishWorkoutReplacingRoutine(modelContext: modelContext)
-                dismiss()
-            }
-            Button("Guardar como nueva rutina") {
-                newRoutineName = "\(viewModel.routine.name) (modificada)"
-                let promptID = UUID()
-                pendingNewRoutinePromptID = promptID
-
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    guard pendingNewRoutinePromptID == promptID else { return }
-                    showingNewRoutineNameAlert = true
-                }
-            }
-            Button("Guardar solo el historial de hoy") {
-                _ = viewModel.finishWorkoutHistoryOnly(modelContext: modelContext)
-                dismiss()
-            }
-            Button("Cancelar", role: .cancel) {}
-        } message: {
-            Text("Has añadido, quitado o modificado datos respecto a la rutina original. ¿Qué quieres hacer con los cambios?")
-        }
-        .alert("Nueva rutina", isPresented: $showingNewRoutineNameAlert) {
-            TextField("Nombre de la rutina", text: $newRoutineName)
-            Button("Guardar") {
-                _ = viewModel.finishWorkoutSavingAsNewRoutine(named: newRoutineName, modelContext: modelContext)
-                dismiss()
-            }
-            Button("Cancelar", role: .cancel) {}
-        } message: {
-            Text("Se guardará una copia con los cambios de hoy.")
-        }
-        .alert("¿Cancelar entrenamiento?", isPresented: $showingCancelConfirmation) {
-            Button("Cancelar entrenamiento", role: .destructive) {
-                pendingNewRoutinePromptID = nil
-                showingRoutineChangeOptions = false
-                showingNewRoutineNameAlert = false
-                viewModel.cancelWorkout(modelContext: modelContext)
-                dismiss()
-            }
-            Button("Seguir entrenando", role: .cancel) {}
-        } message: {
-            Text("Se descartará la sesión actual sin guardar el historial.")
-        }
-        .alert(
-            "Eliminar ejercicio",
-            isPresented: Binding(
-                get: { exercisePendingRemoval != nil },
-                set: { if !$0 { exercisePendingRemoval = nil } }
-            )
-        ) {
-            Button("Eliminar", role: .destructive) {
-                if let routineExercise = exercisePendingRemoval {
-                    viewModel.removeExercise(routineExercise, modelContext: modelContext)
-                }
-                exercisePendingRemoval = nil
-            }
-            Button("Cancelar", role: .cancel) { exercisePendingRemoval = nil }
-        } message: {
-            Text("El ejercicio se quitará del entrenamiento actual.")
-        }
-        .alert(
-            "¿Cancelar entrenamiento?",
-            isPresented: $showingBigPictureCancelConfirmation
-        ) {
-            Button("Sí, cancelar", role: .destructive) {
-                viewModel.cancelWorkout(modelContext: modelContext)
-                dismiss()
-            }
-            Button("Seguir entrenando", role: .cancel) {}
-        } message: {
-            Text("Se descartará la sesión actual sin guardar el historial.")
-        }
-        .withKeyboardDismiss()
-        .dismissKeyboardOnTap()
     }
 
     private var bigPictureBody: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            VStack(spacing: 12) {
+            ScrollView {
+                VStack(spacing: 12) {
                 // Barra superior: cancelar + nombre rutina
                 HStack {
                     Button {
@@ -452,7 +458,6 @@ public struct ActiveWorkoutView: View {
                 if viewModel.bigPictureIsTimerShowing {
                     bigPictureTimerBar
                     bigPictureTimerControls
-                    bigPictureBPMChart
                 } else {
                     Button {
                         viewModel.bigPictureRegisterSet(modelContext: modelContext)
@@ -466,8 +471,11 @@ public struct ActiveWorkoutView: View {
                             .cornerRadius(14)
                     }
                     .padding(.horizontal, 32)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 8)
                 }
+
+                // MARK: - Gráfica BPM (visible durante todo el entrenamiento)
+                bigPictureBPMChart
 
                 // MARK: - Historial de series
                 VStack(alignment: .leading, spacing: 8) {
@@ -500,11 +508,6 @@ public struct ActiveWorkoutView: View {
                 Spacer(minLength: 0)
             }
             .padding(.bottom, 16)
-            .onChange(of: healthKitManager.currentBPM) { _, newBPM in
-                viewModel.addBPMPoint(newBPM)
-            }
-            .onAppear {
-                viewModel.clearBPMHistory()
             }
         }
     }
@@ -512,28 +515,33 @@ public struct ActiveWorkoutView: View {
     private var bigPictureTimerBar: some View {
         TimelineView(.periodic(from: .now, by: 1.0)) { _ in
             GeometryReader { geometry in
+                let barWidth = geometry.size.width
+
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(Color.white.opacity(0.12))
-                        .frame(height: 36)
-                        .frame(width: geometry.size.width)
+                        .frame(width: barWidth, height: 36)
 
                     RoundedRectangle(cornerRadius: 10)
                         .fill(Color.white)
                         .frame(
-                            width: max(0, viewModel.bigPictureRestProgress * geometry.size.width),
+                            width: max(0, barWidth * viewModel.bigPictureRestProgress),
                             height: 36
                         )
+                        .animation(.linear(duration: 1.0), value: viewModel.bigPictureRestProgress)
 
                     Text(viewModel.bigPictureRemainingTimeFormatted)
                         .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .foregroundStyle(.black)
-                        .frame(maxWidth: .infinity, alignment: .center)
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                        .blendMode(.difference)
+                        .frame(width: barWidth, alignment: .center)
                 }
-                .frame(height: 36)
-                .padding(.horizontal, 24)
+                .frame(width: barWidth, height: 36)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
             }
             .frame(height: 36)
+            .padding(.horizontal, 24)
             .padding(.bottom, 6)
         }
     }

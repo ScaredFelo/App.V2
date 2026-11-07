@@ -30,6 +30,7 @@ public final class WorkoutSession {
 public final class WorkoutSetLog {
     public var id: UUID
     public var date: Date
+    public var workoutStartDate: Date?
     public var weight: Double
     public var reps: Int
     public var targetRepsMin: Int = 8
@@ -44,6 +45,7 @@ public final class WorkoutSetLog {
     public init(
         id: UUID = UUID(),
         date: Date = Date(),
+        workoutStartDate: Date? = nil,
         weight: Double = 0.0,
         reps: Int = 0,
         targetRepsMin: Int = 8,
@@ -56,6 +58,7 @@ public final class WorkoutSetLog {
     ) {
         self.id = id
         self.date = date
+        self.workoutStartDate = workoutStartDate
         self.weight = weight
         self.reps = reps
         self.targetRepsMin = targetRepsMin
