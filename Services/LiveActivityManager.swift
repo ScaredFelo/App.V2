@@ -30,6 +30,14 @@ final class LiveActivityManager: ObservableObject {
     private var isAppInBackground = false
     private let staleMargin: TimeInterval = 14_400
 
+    // Arranque diferido de la Live Activity: `Activity.request` se ejecuta en
+    // un Task sobre el MainActor para que el paso a `.background` no lo corte
+    // a mitad de la solicitud.
+    private var pendingStartTask: Task<Void, Never>?
+    private var pendingWorkoutName: String?
+    private var startAttempts = 0
+    private let maxStartAttempts = 3
+
     private init() {}
 
     // MARK: - Ciclo de vida de la app
@@ -43,15 +51,19 @@ final class LiveActivityManager: ObservableObject {
 
     func handleScenePhaseActive() {
         isAppInBackground = false
+        beginPendingStartIfNeeded()
     }
 
     func startActivity(workoutName: String, snapshot: Snapshot, bpm: Int) {
         self.snapshot = snapshot
         self.bpm = max(0, bpm)
+        pendingWorkoutName = workoutName
+        startAttempts = 0
 
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             currentActivity = nil
             lastState = nil
+            pendingWorkoutName = nil
             debugMessage = "Live Activities desactivadas en Ajustes de iOS"
             print("[LiveActivity] Desactivadas en Ajustes de iOS")
             return
@@ -66,33 +78,80 @@ final class LiveActivityManager: ObservableObject {
         if let existingActivity = Activity<WorkoutActivityAttributes>.activities.first(where: { isUsable($0) }) {
             currentActivity = existingActivity
             lastState = nil
+            pendingWorkoutName = nil
             debugMessage = "Live Activity existente reutilizada"
             updateActivity(state: makeState())
             return
         }
 
-        do {
-            currentActivity = nil
-            lastState = nil
-            endOrphanedActivities()
+        beginPendingStartIfNeeded()
+    }
 
-            let attributes = WorkoutActivityAttributes(workoutName: workoutName)
-            let state = makeState()
-            let activity = try Activity<WorkoutActivityAttributes>.request(
-                attributes: attributes,
-                content: makeContent(for: state),
-                pushType: nil
-            )
+    private func beginPendingStartIfNeeded() {
+        guard currentActivity == nil,
+              pendingStartTask == nil,
+              let workoutName = pendingWorkoutName else { return }
 
-            currentActivity = activity
-            lastState = state
-            debugMessage = "Live Activity iniciada correctamente"
-            print("[LiveActivity] Iniciada con éxito con ID: \(activity.id)")
-        } catch {
-            currentActivity = nil
-            lastState = nil
-            debugMessage = "Error al iniciar Live Activity: \(error.localizedDescription)"
-            print("[LiveActivity] ERROR al iniciar: \(error.localizedDescription)")
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            pendingWorkoutName = nil
+            debugMessage = "Live Activities desactivadas en Ajustes de iOS"
+            return
+        }
+
+        guard startAttempts < maxStartAttempts else {
+            debugMessage = "No se pudo iniciar la Live Activity tras varios intentos"
+            return
+        }
+
+        startAttempts += 1
+        pendingStartTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            // Dejamos que termine el ciclo de vida actual antes de solicitar
+            // la actividad; así el cambio a segundo plano no interrumpe nada.
+            await Task.yield()
+
+            defer { self.pendingStartTask = nil }
+
+            guard !Task.isCancelled, self.currentActivity == nil else { return }
+
+            do {
+                self.endOrphanedActivities()
+
+                let attributes = WorkoutActivityAttributes(workoutName: workoutName)
+                let state = self.makeState()
+                let activity = try Activity<WorkoutActivityAttributes>.request(
+                    attributes: attributes,
+                    content: self.makeContent(for: state),
+                    pushType: nil
+                )
+
+                guard !Task.isCancelled else {
+                    Task { await activity.end(nil, dismissalPolicy: .immediate) }
+                    return
+                }
+
+                self.currentActivity = activity
+                self.lastState = state
+                self.pendingWorkoutName = nil
+                self.startAttempts = 0
+                self.debugMessage = "Live Activity iniciada correctamente"
+                print("[LiveActivity] Iniciada con éxito con ID: \(activity.id)")
+            } catch {
+                self.currentActivity = nil
+                self.lastState = nil
+                self.debugMessage = "Error al iniciar Live Activity: \(error.localizedDescription)"
+                print("[LiveActivity] ERROR al iniciar: \(error.localizedDescription)")
+                self.scheduleStartRetryIfNeeded()
+            }
+        }
+    }
+
+    private func scheduleStartRetryIfNeeded() {
+        guard pendingWorkoutName != nil, startAttempts < maxStartAttempts else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.beginPendingStartIfNeeded()
         }
     }
 
@@ -153,6 +212,11 @@ final class LiveActivityManager: ObservableObject {
     }
 
     func endActivity() {
+        pendingStartTask?.cancel()
+        pendingStartTask = nil
+        pendingWorkoutName = nil
+        startAttempts = 0
+
         guard let activity = currentActivity else {
             lastState = nil
             return

@@ -73,7 +73,7 @@ public final class ActiveWorkoutViewModel {
         captureOriginalStructure()
         HealthKitManager.shared.requestAuthorization()
         let hasStoredStateForSession = ActiveWorkoutStateStore.load()?.activeWorkoutID == session.id
-        restorePersistedStateIfNeeded()
+        restorePersistedStateIfNeeded(modelContext: modelContext)
         if !hasStoredStateForSession {
             persistState()
         }
@@ -365,11 +365,15 @@ public final class ActiveWorkoutViewModel {
 
     public func handleScenePhaseBackground(modelContext: ModelContext) {
         try? modelContext.save()
-        persistState()
         LiveActivityManager.shared.handleScenePhaseBackground()
 
-        guard isResting, !isRestPaused else { return }
-        updateRestRemainingFromClock()
+        // Actualizamos el tiempo restante antes de persistir para que el estado
+        // guardado refleje el instante exacto en el que la app se va a segundo plano.
+        if isResting, !isRestPaused {
+            updateRestRemainingFromClock()
+        }
+
+        persistState()
     }
 
     public func handleScenePhaseActive() {
@@ -444,24 +448,28 @@ public final class ActiveWorkoutViewModel {
             while !Task.isCancelled {
                 guard let self, !self.isRestPaused else { return }
 
-                let remaining: Int
+                let remaining: TimeInterval
                 if let endDate = self.restTimerEndDate {
-                    remaining = max(0, Int(ceil(endDate.timeIntervalSinceNow)))
+                    remaining = endDate.timeIntervalSinceNow
                 } else if let startDate = self.timerStartDate {
-                    let elapsed = Date().timeIntervalSince(startDate)
-                    remaining = max(0, Int(ceil(Double(self.timerTargetDuration) - elapsed)))
+                    remaining = Double(self.timerTargetDuration) - Date().timeIntervalSince(startDate)
                 } else {
                     return
                 }
 
-                self.restTimeRemaining = remaining
-
                 if remaining <= 0 {
+                    // Solo mutamos el estado al terminar: la UI descuenta el
+                    // tiempo con TimelineView y así evitamos re-renderizar la
+                    // vista completa cada segundo.
+                    self.restTimeRemaining = 0
                     self.finishRest()
                     return
                 }
 
-                try? await Task.sleep(nanoseconds: 500_000_000)
+                // Dormimos en fragmentos cortos para reaccionar a +10/-10 s,
+                // pero sin publicar cambios de estado en cada iteración.
+                let sleepSeconds = min(remaining, 1.0)
+                try? await Task.sleep(nanoseconds: UInt64(sleepSeconds * 1_000_000_000))
             }
         }
     }
@@ -700,6 +708,9 @@ public final class ActiveWorkoutViewModel {
             workoutStartDate: session.startDate,
             completedSets: completedSets,
             restTimerEndDate: restTimerEndDate,
+            bpmHistory: bpmHistory.map {
+                PersistedBPMPoint(timestamp: $0.timestamp, bpm: $0.bpm)
+            },
             timerStartDate: timerStartDate,
             totalRestSeconds: totalRestSeconds,
             restTimeRemaining: restTimeRemaining,
@@ -719,12 +730,18 @@ public final class ActiveWorkoutViewModel {
         ActiveWorkoutStateStore.save(state)
     }
 
-    private func restorePersistedStateIfNeeded() {
+    private func restorePersistedStateIfNeeded(modelContext: ModelContext) {
         guard session.endDate == nil,
               let state = ActiveWorkoutStateStore.load(),
               state.activeWorkoutID == session.id,
-              state.routineID == routine.id,
-              state.isResting else { return }
+              state.routineID == routine.id else { return }
+
+        // Recuperamos siempre el historial de BPM y las series completadas,
+        // independientemente de que hubiera un descanso en curso.
+        restoreBPMHistory(from: state)
+        restoreCompletedSets(from: state.completedSets, modelContext: modelContext)
+
+        guard state.isResting else { return }
 
         currentExerciseName = state.currentExerciseName
         currentRestModeTitle = state.currentRestModeTitle
@@ -776,6 +793,72 @@ public final class ActiveWorkoutViewModel {
         NotificationManager.shared.scheduleRestFinishedNotification(endingAt: endDate)
         AudioAlertService.shared.startBackgroundAudio()
         startTimerCountdown()
+    }
+
+    /// Restaura las lecturas de pulso guardadas para que la gráfica de Big
+    /// Picture no se vacíe al volver a abrir la app. El filtro de 3 minutos se
+    /// aplica al dibujar, no al restaurar.
+    private func restoreBPMHistory(from state: PersistedWorkoutState) {
+        bpmHistory = (state.bpmHistory ?? [])
+            .filter { $0.bpm > 0 }
+            .map { BPMDataPoint(timestamp: $0.timestamp, bpm: $0.bpm) }
+    }
+
+    /// Vuelve a crear en SwiftData las series completadas que falten. Así los
+    /// pesos, repeticiones e índice actual están listos antes de renderizar
+    /// `ActiveWorkoutView`, incluso si el guardado anterior falló a medias.
+    private func restoreCompletedSets(
+        from persistedSets: [PersistedWorkoutSet],
+        modelContext: ModelContext
+    ) {
+        guard !persistedSets.isEmpty else { return }
+
+        var didInsertMissingLog = false
+
+        for persisted in persistedSets {
+            guard var sets = activeSets[persisted.routineExerciseID],
+                  sets.indices.contains(persisted.setNumber - 1) else { continue }
+
+            let index = persisted.setNumber - 1
+            let routineExercise = routine.exercises.first { $0.id == persisted.routineExerciseID }
+
+            if sets[index].existingLog != nil {
+                sets[index].isCompleted = true
+                activeSets[persisted.routineExerciseID] = sets
+                continue
+            }
+
+            let log = WorkoutSetLog(
+                date: persisted.date,
+                workoutStartDate: session.startDate,
+                weight: persisted.weight,
+                reps: persisted.reps,
+                targetRepsMin: routineExercise?.targetRepsMin ?? 8,
+                targetRepsMax: routineExercise?.targetRepsMax ?? 12,
+                isCompleted: true,
+                routineExerciseID: persisted.routineExerciseID,
+                setNumber: persisted.setNumber,
+                exercise: routineExercise?.exercise,
+                session: session
+            )
+
+            modelContext.insert(log)
+            session.setsCompleted.append(log)
+            sets[index].existingLog = log
+            sets[index].isCompleted = true
+            sets[index].weight = persisted.weight
+            sets[index].reps = persisted.reps
+            activeSets[persisted.routineExerciseID] = sets
+            didInsertMissingLog = true
+        }
+
+        if didInsertMissingLog {
+            session.totalVolumeKg = session.setsCompleted
+                .filter { $0.isCompleted }
+                .reduce(0) { $0 + $1.weight * Double($1.reps) }
+        }
+
+        try? modelContext.save()
     }
 
     // MARK: - Finish / Cancel
@@ -990,12 +1073,18 @@ public final class ActiveWorkoutViewModel {
         return max(0, min(1, Double(bigPictureRemainingTime) / Double(totalRestSeconds)))
     }
 
-    public func bigPictureAdjustWeight(_ delta: Double) {
+    public func bigPictureUpdateWeight(_ weight: Double, modelContext: ModelContext) {
         guard let id = bigPictureCurrentExerciseID,
-              var sets = activeSets[id],
+              let sets = activeSets[id],
               let index = sets.firstIndex(where: { !$0.isCompleted }) else { return }
-        sets[index].weight = max(0, sets[index].weight + delta)
-        activeSets[id] = sets
+
+        updateSetValues(
+            for: id,
+            setIndex: index,
+            weight: weight,
+            reps: sets[index].reps,
+            modelContext: modelContext
+        )
     }
 
     public func bigPictureAdjustReps(_ delta: Int) {
@@ -1017,19 +1106,46 @@ public final class ActiveWorkoutViewModel {
 
     public struct BPMDataPoint: Identifiable {
         public let id = UUID()
-        public let time: Date
+        public let timestamp: Date
         public let bpm: Int
     }
 
     public var bpmHistory: [BPMDataPoint] = []
-    private let maxBpmHistoryPoints = 60
+    private let bpmHistoryWindow: TimeInterval = 180
+    private var lastBPMPersistDate: Date = .distantPast
 
     public func addBPMPoint(_ bpm: Int) {
         guard bpm > 0 else { return }
-        bpmHistory.append(BPMDataPoint(time: Date(), bpm: bpm))
-        if bpmHistory.count > maxBpmHistoryPoints {
-            bpmHistory.removeFirst(bpmHistory.count - maxBpmHistoryPoints)
-        }
+
+        let now = Date()
+        bpmHistory.append(BPMDataPoint(timestamp: now, bpm: bpm))
+        pruneBPMHistory(relativeTo: now)
+        persistBPMHistoryIfNeeded(now: now)
+    }
+
+    /// Lecturas dentro de la ventana indicada respecto a `date`. La vista la
+    /// evalúa dentro de un `TimelineView`, por lo que la ventana de 3 minutos
+    /// se desplaza sola aunque no lleguen nuevas lecturas.
+    public func bpmPoints(
+        within window: TimeInterval = 180,
+        relativeTo date: Date = Date()
+    ) -> [BPMDataPoint] {
+        let cutoff = date.addingTimeInterval(-window)
+        return bpmHistory.filter { $0.timestamp >= cutoff && $0.timestamp <= date }
+    }
+
+    private func pruneBPMHistory(relativeTo date: Date) {
+        let cutoff = date.addingTimeInterval(-(bpmHistoryWindow + 5))
+        guard let firstValid = bpmHistory.firstIndex(where: { $0.timestamp >= cutoff }),
+              firstValid > 0 else { return }
+        bpmHistory.removeFirst(firstValid)
+    }
+
+    private func persistBPMHistoryIfNeeded(now: Date) {
+        guard session.endDate == nil else { return }
+        guard now.timeIntervalSince(lastBPMPersistDate) >= 10 else { return }
+        lastBPMPersistDate = now
+        persistState()
     }
 
     public func clearBPMHistory() {

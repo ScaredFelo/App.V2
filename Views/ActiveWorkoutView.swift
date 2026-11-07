@@ -21,6 +21,8 @@ public struct ActiveWorkoutView: View {
     @State private var exercisePendingRemoval: RoutineExercise?
     @State private var pendingNewRoutinePromptID: UUID?
     @State private var newRoutineName = ""
+    @FocusState private var isWeightFieldFocused: Bool
+    @State private var weightInput = ""
 
     @Namespace private var timerAnimation
     @State private var timerOriginCardID: UUID?
@@ -394,37 +396,44 @@ public struct ActiveWorkoutView: View {
                 }
                 .padding(.horizontal, 24)
 
-                // MARK: - Peso central con controles de carga
-                VStack(spacing: 4) {
-                    Text("\(Int(viewModel.bigPictureCurrentWeight)) kg")
+                // MARK: - Peso central con teclado numérico directo
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    TextField("0", text: $weightInput)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
                         .font(.system(size: 72, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 4)
-
-                    HStack(spacing: 16) {
-                        Button {
-                            viewModel.bigPictureAdjustWeight(-2.5)
-                        } label: {
-                            Image(systemName: "minus.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.white)
+                        .tint(.white)
+                        .focused($isWeightFieldFocused)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .frame(minWidth: 100, alignment: .trailing)
+                        .onChange(of: weightInput) { _, newValue in
+                            guard isWeightFieldFocused else { return }
+                            let normalized = newValue.replacingOccurrences(of: ",", with: ".")
+                            guard let value = Double(normalized) else { return }
+                            viewModel.bigPictureUpdateWeight(value, modelContext: modelContext)
                         }
+                        .onSubmit { isWeightFieldFocused = false }
+                        .accessibilityLabel("Peso actual. Toca para editar.")
 
-                        Text("Ajustar carga")
-                            .font(.caption2.bold())
-                            .foregroundStyle(.secondary)
-
-                        Button {
-                            viewModel.bigPictureAdjustWeight(2.5)
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.white)
-                        }
-                    }
+                    Text("kg")
+                        .font(.system(size: 34, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+                .onAppear { syncWeightInput(force: true) }
+                .onChange(of: viewModel.bigPictureCurrentExerciseID) { _, _ in
+                    syncWeightInput(force: true)
+                }
+                .onChange(of: viewModel.bigPictureCurrentWeight) { _, _ in
+                    syncWeightInput()
+                }
+                .onChange(of: isWeightFieldFocused) { _, isFocused in
+                    if !isFocused {
+                        syncWeightInput(force: true)
+                    }
+                }
 
                 // MARK: - Repeticiones (reducido)
                 HStack(spacing: 30) {
@@ -588,37 +597,58 @@ public struct ActiveWorkoutView: View {
 
     private var bigPictureBPMChart: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("PULSACIONES")
+            Text("PULSACIONES · ÚLTIMOS 3 MIN")
                 .font(.caption2.bold())
                 .foregroundStyle(.secondary)
 
-            if viewModel.bpmHistory.isEmpty {
-                Text("Esperando datos de frecuencia cardíaca...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary.opacity(0.7))
+            TimelineView(.periodic(from: .now, by: 1.0)) { timeline in
+                let points = viewModel.bpmPoints(within: 180, relativeTo: timeline.date)
+
+                if points.isEmpty {
+                    Text("Esperando datos de frecuencia cardíaca...")
+                        .font(.caption)
+                        .foregroundStyle(.secondary.opacity(0.7))
+                        .frame(height: 100)
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Chart(points) { sample in
+                        LineMark(
+                            x: .value("Tiempo", sample.timestamp),
+                            y: .value("BPM", sample.bpm)
+                        )
+                        .foregroundStyle(Color.red)
+                        .interpolationMethod(.catmullRom)
+
+                        PointMark(
+                            x: .value("Tiempo", sample.timestamp),
+                            y: .value("BPM", sample.bpm)
+                        )
+                        .foregroundStyle(Color.red)
+                    }
+                    .chartXScale(domain: timeline.date.addingTimeInterval(-180)...timeline.date)
+                    .chartYScale(domain: 40...200)
                     .frame(height: 100)
                     .frame(maxWidth: .infinity)
-            } else {
-                Chart(viewModel.bpmHistory) { sample in
-                    LineMark(
-                        x: .value("Tiempo", sample.time),
-                        y: .value("BPM", sample.bpm)
-                    )
-                    .foregroundStyle(Color.red)
-
-                    PointMark(
-                        x: .value("Tiempo", sample.time),
-                        y: .value("BPM", sample.bpm)
-                    )
-                    .foregroundStyle(Color.red)
                 }
-                .chartYScale(domain: 40...200)
-                .frame(height: 100)
-                .frame(maxWidth: .infinity)
             }
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 4)
+    }
+
+    /// Sincroniza el texto del peso con la serie pendiente actual. No pisa lo
+    /// que el usuario está escribiendo mientras el campo tiene el foco.
+    private func syncWeightInput(force: Bool = false) {
+        guard force || !isWeightFieldFocused else { return }
+        weightInput = formattedWeight(viewModel.bigPictureCurrentWeight)
+    }
+
+    private func formattedWeight(_ weight: Double) -> String {
+        guard weight > 0 else { return "" }
+        if weight.rounded() == weight {
+            return String(Int(weight))
+        }
+        return String(format: "%.1f", weight)
     }
 
     private var timerDragGesture: some Gesture {

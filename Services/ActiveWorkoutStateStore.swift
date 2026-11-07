@@ -10,12 +10,20 @@ struct PersistedWorkoutSet: Codable, Hashable {
     var date: Date
 }
 
+struct PersistedBPMPoint: Codable, Hashable {
+    var timestamp: Date
+    var bpm: Int
+}
+
 struct PersistedWorkoutState: Codable, Hashable {
     var activeWorkoutID: UUID
     var routineID: UUID
     var workoutStartDate: Date
     var completedSets: [PersistedWorkoutSet]
     var restTimerEndDate: Date?
+    /// Lecturas de BPM de los últimos minutos. Opcional para mantener la
+    /// compatibilidad con estados guardados por versiones anteriores.
+    var bpmHistory: [PersistedBPMPoint]? = nil
 
     // Estado auxiliar para reanudar el temporizador exactamente donde se quedó.
     var timerStartDate: Date?
@@ -47,7 +55,15 @@ enum ActiveWorkoutStateStore {
 
     static func load() -> PersistedWorkoutState? {
         guard let data = UserDefaults.standard.data(forKey: storageKey) else { return nil }
-        return try? decoder.decode(PersistedWorkoutState.self, from: data)
+
+        do {
+            return try decoder.decode(PersistedWorkoutState.self, from: data)
+        } catch {
+            // Estado ilegible (datos corruptos o de una versión incompatible):
+            // lo descartamos para volver de forma segura a la pantalla principal.
+            UserDefaults.standard.removeObject(forKey: storageKey)
+            return nil
+        }
     }
 
     static func clear() {
