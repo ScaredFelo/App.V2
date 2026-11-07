@@ -92,13 +92,13 @@ public final class ActiveWorkoutViewModel {
 
         let exerciseID = exercise.id
         let descriptor = FetchDescriptor<WorkoutSetLog>(
-            predicate: #Predicate { (log: WorkoutSetLog) -> Bool in
-                return log.exercise?.id == exerciseID
-            },
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
 
-        let allLogs = (try? modelContext.fetch(descriptor)) ?? []
+        let fetchedLogs = (try? modelContext.fetch(descriptor)) ?? []
+        let allLogs = fetchedLogs.filter { (log: WorkoutSetLog) -> Bool in
+            return log.exercise?.id == exerciseID
+        }
 
         // Historial de referencia: solo entrenamientos anteriores (nunca la
         // sesión en curso) y, preferentemente, de esta misma variante de rutina.
@@ -1144,14 +1144,14 @@ public final class ActiveWorkoutViewModel {
         }
 
         // Última sesión previa para este ejercicio (excluyendo la sesión en curso).
-        let sessionID = session.id
+        let sessionID: UUID = session.id
         let descriptor = FetchDescriptor<WorkoutSetLog>(
-            predicate: #Predicate { (log: WorkoutSetLog) -> Bool in
-                return log.exercise?.id == exercise.id && log.isCompleted && log.session?.id != sessionID
-            },
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
-        let pastLogs = (try? modelContext.fetch(descriptor)) ?? []
+        let fetchedPastLogs = (try? modelContext.fetch(descriptor)) ?? []
+        let pastLogs = fetchedPastLogs.filter { (log: WorkoutSetLog) -> Bool in
+            return log.exercise?.id == exercise.id && log.isCompleted && log.session?.id != sessionID
+        }
 
         // Agrupar por sesión y quedarse con la más reciente.
         // `pastLogs` viene ordenado por fecha descendente, así que el primer
