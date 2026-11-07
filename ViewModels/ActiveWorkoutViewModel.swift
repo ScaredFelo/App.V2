@@ -96,7 +96,27 @@ public final class ActiveWorkoutViewModel {
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
 
-        let pastLogs = (try? modelContext.fetch(descriptor)) ?? []
+        let allLogs = (try? modelContext.fetch(descriptor)) ?? []
+
+        // Historial de referencia: solo entrenamientos anteriores (nunca la
+        // sesión en curso) y, preferentemente, de esta misma variante de rutina.
+        let sessionID = session.id
+        let previousLogs = allLogs.filter { log in
+            guard log.isCompleted else { return false }
+            guard log.session?.id != sessionID else { return false }
+            guard log.date < session.startDate else { return false }
+            guard let logRoutineExerciseID = log.routineExerciseID else { return true }
+            return logRoutineExerciseID == routineExercise.id
+        }
+
+        // Para la parrilla de Big Picture solo cuenta la última sesión previa.
+        let lastSessionLogs: [WorkoutSetLog]
+        if let latestSessionID = previousLogs.first?.session?.id {
+            lastSessionLogs = previousLogs.filter { $0.session?.id == latestSessionID }
+        } else {
+            lastSessionLogs = previousLogs
+        }
+
         let currentLogs = session.setsCompleted.filter {
             $0.exercise?.id == exerciseID && $0.isCompleted
         }
@@ -117,7 +137,8 @@ public final class ActiveWorkoutViewModel {
             }
             let currentLog = stableLog ?? legacyLog
 
-            let matchingLog = pastLogs.indices.contains(i - 1) ? pastLogs[i - 1] : pastLogs.first
+            let matchingLog = lastSessionLogs.first { $0.setNumber == i }
+                ?? (lastSessionLogs.indices.contains(i - 1) ? lastSessionLogs[i - 1] : nil)
             let ghostW = matchingLog?.weight
             let ghostR = matchingLog?.reps
             let initialWeight = routineExercise.defaultWeight > 0 ? routineExercise.defaultWeight : (ghostW ?? 0.0)
@@ -1052,6 +1073,67 @@ public final class ActiveWorkoutViewModel {
         return session.setsCompleted
             .filter { $0.exercise?.id == exercise.id && $0.isCompleted }
             .sorted { $0.date < $1.date }
+    }
+
+    /// Filas de la parrilla de series del ejercicio actual en Big Picture.
+    /// Columna 1: número de serie. Columna 2: marca de la última sesión previa ("kg · reps" o "-").
+    /// Columna 3: marca de la sesión actual si ya se completó (verde), o vacía si aún no.
+    public struct BigPictureSetRow: Identifiable {
+        public let id = UUID()
+        public let setNumber: Int
+        public let previousText: String?
+        public let currentText: String?
+    }
+
+    public func bigPictureSetRows(modelContext: ModelContext) -> [BigPictureSetRow] {
+        guard let id = bigPictureCurrentExerciseID,
+              let sets = activeSets[id],
+              let exercise = bigPictureCurrentRoutineExercise?.exercise else { return [] }
+
+        let currentSets = sets.sorted { $0.setNumber < $1.setNumber }
+
+        // Última sesión previa para este ejercicio (excluyendo la sesión en curso).
+        let sessionID = session.id
+        let descriptor = FetchDescriptor<WorkoutSetLog>(
+            predicate: #Predicate { log in
+                log.exercise?.id == exercise.id && log.isCompleted && log.session?.id != sessionID
+            },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        let pastLogs = (try? modelContext.fetch(descriptor)) ?? []
+
+        // Agrupar por sesión y quedarse con la más reciente.
+        // `pastLogs` viene ordenado por fecha descendente, así que el primer
+        // log pertenece a la última sesión previa.
+        let latestSessionID = pastLogs.first?.session?.id
+        let latestSessionLogs: [WorkoutSetLog]
+        if let latestSessionID,
+           let logs = Dictionary(grouping: pastLogs) { $0.session?.id }[latestSessionID] {
+            latestSessionLogs = logs.sorted { ($0.setNumber ?? 0) < ($1.setNumber ?? 0) }
+        } else {
+            latestSessionLogs = []
+        }
+
+        var rows: [BigPictureSetRow] = []
+        for set in currentSets {
+            let previous = latestSessionLogs.first { $0.setNumber == set.setNumber }
+            let previousText = previous.map { "\(Int($0.weight)) kg · \($0.reps)" }
+
+            let currentText: String?
+            if set.isCompleted, let log = set.existingLog {
+                currentText = "\(Int(log.weight)) kg · \(log.reps)"
+            } else {
+                currentText = nil
+            }
+
+            rows.append(BigPictureSetRow(
+                setNumber: set.setNumber,
+                previousText: previousText,
+                currentText: currentText
+            ))
+        }
+
+        return rows
     }
 
     public var bigPictureIsTimerShowing: Bool {

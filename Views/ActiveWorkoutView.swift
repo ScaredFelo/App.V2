@@ -378,13 +378,21 @@ public struct ActiveWorkoutView: View {
                 .padding(.top, 2)
                 .padding(.horizontal, 24)
 
-                // MARK: - Ejercicio actual y siguiente (jerarquía de títulos)
+                // MARK: - Ejercicio actual, rango objetivo y siguiente (jerarquía de títulos)
                 VStack(spacing: 4) {
                     Text(viewModel.bigPictureCurrentExercise)
                         .font(.title2.bold())
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
+
+                    if let routineExercise = viewModel.bigPictureCurrentRoutineExercise {
+                        Text("\(routineExercise.targetRepsMin) - \(routineExercise.targetRepsMax) reps")
+                            .font(.subheadline.bold())
+                            .foregroundColor(.green)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                    }
 
                     if !viewModel.bigPictureNextExercise.isEmpty {
                         Text(viewModel.bigPictureNextExercise)
@@ -435,33 +443,41 @@ public struct ActiveWorkoutView: View {
                     }
                 }
 
-                // MARK: - Repeticiones (reducido)
-                HStack(spacing: 30) {
+                // MARK: - Repeticiones (centrado y compacto)
+                HStack(spacing: 16) {
                     Button {
                         viewModel.bigPictureAdjustReps(-1)
                     } label: {
                         Image(systemName: "minus.circle.fill")
-                            .font(.system(size: 42))
+                            .font(.title3)
                             .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                            .background(Color.white.opacity(0.15))
+                            .clipShape(Circle())
                     }
 
-                    Text("\(viewModel.bigPictureCurrentReps)")
-                        .font(.system(size: 60, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .frame(width: 120, alignment: .center)
+                    VStack(spacing: 2) {
+                        Text("\(viewModel.bigPictureCurrentReps)")
+                            .font(.system(size: 60, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
 
-                    Text("REPS")
-                        .font(.caption2.bold())
-                        .foregroundStyle(.secondary)
+                        Text("REPS")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.secondary)
+                    }
 
                     Button {
                         viewModel.bigPictureAdjustReps(1)
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 42))
+                            .font(.title3)
                             .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                            .background(Color.white.opacity(0.15))
+                            .clipShape(Circle())
                     }
                 }
+                .frame(maxWidth: .infinity)
 
                 // MARK: - Temporizador integrado o botón registrar serie
                 if viewModel.bigPictureIsTimerShowing {
@@ -486,32 +502,66 @@ public struct ActiveWorkoutView: View {
                 // MARK: - Gráfica BPM (visible durante todo el entrenamiento)
                 bigPictureBPMChart
 
-                // MARK: - Historial de series
+                // MARK: - Parrilla de series (historial vs nueva marca)
+                let setRows = viewModel.bigPictureSetRows(modelContext: modelContext)
+
                 VStack(alignment: .leading, spacing: 8) {
                     Text("SERIES PASADAS (\(viewModel.bigPictureCurrentExercise))")
                         .font(.headline.bold())
                         .foregroundStyle(.white)
 
-                    if viewModel.bigPictureSetsForCurrentExercise.isEmpty {
+                    if setRows.isEmpty {
                         Text("Sin series registradas")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(Array(viewModel.bigPictureSetsForCurrentExercise.enumerated()), id: \.element.id) { index, log in
-                            HStack {
-                                Text("\(index + 1). SERIE")
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                                Text("\(Int(log.weight)) kg · \(log.reps) reps")
-                                    .font(.subheadline)
+                        let columns = [
+                            GridItem(.flexible(), spacing: 12),
+                            GridItem(.flexible(), spacing: 12),
+                            GridItem(.flexible(), spacing: 12)
+                        ]
+
+                        LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                            // Cabecera
+                            Text("Serie")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.secondary)
+                            Text("Última Sesión")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.secondary)
+                            Text("Nueva Marca")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.secondary)
+
+                            ForEach(setRows) { row in
+                                Text("Serie \(row.setNumber)")
+                                    .font(.caption2.bold())
                                     .foregroundStyle(.white)
+
+                                if let previous = row.previousText {
+                                    Text(previous)
+                                        .font(.caption2)
+                                        .foregroundStyle(.white.opacity(0.85))
+                                } else {
+                                    Text("-")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary.opacity(0.6))
+                                }
+
+                                if let current = row.currentText {
+                                    Text(current)
+                                        .font(.caption2.bold())
+                                        .foregroundColor(.green)
+                                } else {
+                                    Text("-")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary.opacity(0.4))
+                                }
                             }
-                            .padding(.vertical, 4)
                         }
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, 24)
 
                 Spacer(minLength: 0)
