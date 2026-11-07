@@ -366,7 +366,7 @@ public struct ActiveWorkoutView: View {
                     restTimerProgressView
 
                     // MARK: - Gráfica BPM (visible durante todo el entrenamiento)
-                    BigPictureBPMChartView(bpmHistory: viewModel.bpmHistoryLast3Minutes)
+                    BPMChartView(samples: viewModel.bpmHistoryLast3Minutes)
 
                     // MARK: - Parrilla de series (historial vs nueva marca)
                     BigPictureSetsGridView(
@@ -482,7 +482,9 @@ public struct ActiveWorkoutView: View {
     private var bigPictureTimerBar: some View {
         TimelineView(.periodic(from: .now, by: 1.0)) { _ in
             GeometryReader { geometry in
-                let barWidth = geometry.size.width
+                let barWidth: CGFloat = geometry.size.width
+                let progress: CGFloat = CGFloat(viewModel.bigPictureRestProgress)
+                let filledWidth: CGFloat = max(0, barWidth * progress)
 
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 10)
@@ -492,7 +494,7 @@ public struct ActiveWorkoutView: View {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(Color.white)
                         .frame(
-                            width: max(0, barWidth * CGFloat(viewModel.bigPictureRestProgress)),
+                            width: filledWidth,
                             height: 36
                         )
                         .animation(.linear(duration: 1.0), value: viewModel.bigPictureRestProgress)
@@ -1051,9 +1053,9 @@ struct BigPictureControlsView: View {
     }
 }
 
-// MARK: - Big Picture BPM Chart View (ventana de 3 minutos)
-struct BigPictureBPMChartView: View {
-    var bpmHistory: [ActiveWorkoutViewModel.BPMDataPoint]
+// MARK: - BPM Chart View (ventana de 3 minutos)
+struct BPMChartView: View {
+    let samples: [ActiveWorkoutViewModel.BPMDataPoint]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -1062,26 +1064,24 @@ struct BigPictureBPMChartView: View {
                 .foregroundStyle(.secondary)
 
             TimelineView(.periodic(from: .now, by: 1.0)) { timeline in
-                let points = bpmHistory
-
-                if points.isEmpty {
+                if samples.isEmpty {
                     Text("Esperando datos de frecuencia cardíaca...")
                         .font(.caption)
                         .foregroundStyle(.secondary.opacity(0.7))
                         .frame(height: 100)
                         .frame(maxWidth: .infinity)
                 } else {
-                    Chart(points) { sample in
+                    Chart(samples) { (sample: ActiveWorkoutViewModel.BPMDataPoint) in
                         LineMark(
                             x: .value("Tiempo", sample.timestamp),
-                            y: .value("BPM", sample.bpm)
+                            y: .value("BPM", Double(sample.bpm))
                         )
                         .foregroundStyle(Color.red)
                         .interpolationMethod(.catmullRom)
 
                         PointMark(
                             x: .value("Tiempo", sample.timestamp),
-                            y: .value("BPM", sample.bpm)
+                            y: .value("BPM", Double(sample.bpm))
                         )
                         .foregroundStyle(Color.red)
                     }

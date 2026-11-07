@@ -134,8 +134,8 @@ public final class ActiveWorkoutViewModel {
         var sets: [SetInputState] = []
 
         for i in 1...max(1, routineExercise.defaultSets) {
-            let stableLog = currentLogs.first {
-                $0.routineExerciseID == routineExercise.id && $0.setNumber == i
+            let stableLog = currentLogs.first { (log: WorkoutSetLog) -> Bool in
+                return log.routineExerciseID == routineExercise.id && log.setNumber == i
             }
             let legacyLog: WorkoutSetLog?
             if stableLog == nil, !legacyLogs.isEmpty {
@@ -145,7 +145,9 @@ public final class ActiveWorkoutViewModel {
             }
             let currentLog = stableLog ?? legacyLog
 
-            let matchingLog = lastSessionLogs.first { $0.setNumber == i }
+            let matchingLog = lastSessionLogs.first { (log: WorkoutSetLog) -> Bool in
+                return log.setNumber == i
+            }
                 ?? (lastSessionLogs.indices.contains(i - 1) ? lastSessionLogs[i - 1] : nil)
             let ghostW = matchingLog?.weight
             let ghostR = matchingLog?.reps
@@ -207,13 +209,17 @@ public final class ActiveWorkoutViewModel {
     }
 
     private func normalizeSortOrder() {
-        for (index, routineExercise) in routine.exercises.sorted(by: { $0.sortOrder < $1.sortOrder }).enumerated() {
+        for (index, routineExercise) in routine.exercises.sorted(by: { (lhs: RoutineExercise, rhs: RoutineExercise) -> Bool in
+            return lhs.sortOrder < rhs.sortOrder
+        }).enumerated() {
             routineExercise.sortOrder = index
         }
     }
 
     private func captureOriginalStructure() {
-        originalRoutineExercises = routine.exercises.sorted { $0.sortOrder < $1.sortOrder }
+        originalRoutineExercises = routine.exercises.sorted { (lhs: RoutineExercise, rhs: RoutineExercise) -> Bool in
+            return lhs.sortOrder < rhs.sortOrder
+        }
         originalSnapshots = originalRoutineExercises.map {
             RoutineSnapshot(
                 id: $0.id,
@@ -230,7 +236,9 @@ public final class ActiveWorkoutViewModel {
     }
 
     public var hasRoutineChanged: Bool {
-        let current = routine.exercises.sorted { $0.sortOrder < $1.sortOrder }
+        let current = routine.exercises.sorted { (lhs: RoutineExercise, rhs: RoutineExercise) -> Bool in
+            return lhs.sortOrder < rhs.sortOrder
+        }
         guard current.count == originalSnapshots.count else { return true }
 
         let snapshotsByID = Dictionary(uniqueKeysWithValues: originalSnapshots.map { ($0.id, $0) })
@@ -264,7 +272,9 @@ public final class ActiveWorkoutViewModel {
         }
 
         for snapshot in originalSnapshots {
-            guard let routineExercise = originalRoutineExercises.first(where: { $0.id == snapshot.id }) else { continue }
+            guard let routineExercise: RoutineExercise = originalRoutineExercises.first(where: { (re: RoutineExercise) -> Bool in
+                return re.id == snapshot.id
+            }) else { continue }
             routineExercise.exercise = snapshot.exercise
             routineExercise.defaultSets = snapshot.defaultSets
             routineExercise.targetRepsMin = snapshot.targetRepsMin
@@ -275,7 +285,9 @@ public final class ActiveWorkoutViewModel {
             routineExercise.notes = snapshot.notes
         }
 
-        routine.exercises = originalRoutineExercises.sorted { $0.sortOrder < $1.sortOrder }
+        routine.exercises = originalRoutineExercises.sorted { (lhs: RoutineExercise, rhs: RoutineExercise) -> Bool in
+            return lhs.sortOrder < rhs.sortOrder
+        }
         addedRoutineExerciseIDs.removeAll()
         removedRoutineExercises.removeAll()
         structureVersion += 1
@@ -300,7 +312,9 @@ public final class ActiveWorkoutViewModel {
 
         if isNowCompleted {
             let targetSet = sets[setIndex]
-            let routineExercise = routine.exercises.first(where: { $0.id == routineExerciseID })
+            let routineExercise: RoutineExercise? = routine.exercises.first(where: { (re: RoutineExercise) -> Bool in
+                return re.id == routineExerciseID
+            })
             let exercise = routineExercise?.exercise
 
             let log = WorkoutSetLog(
@@ -341,7 +355,9 @@ public final class ActiveWorkoutViewModel {
 
             if let log = targetSet.existingLog {
                 volumeToSubtract = log.weight * Double(log.reps)
-                session.setsCompleted.removeAll { $0.id == log.id }
+                session.setsCompleted.removeAll { (l: WorkoutSetLog) -> Bool in
+                    return l.id == log.id
+                }
                 modelContext.delete(log)
             } else {
                 volumeToSubtract = targetSet.weight * Double(targetSet.reps)
@@ -737,8 +753,8 @@ public final class ActiveWorkoutViewModel {
             workoutStartDate: session.startDate,
             completedSets: completedSets,
             restTimerEndDate: restTimerEndDate,
-            bpmHistory: bpmHistory.map {
-                PersistedBPMPoint(timestamp: $0.timestamp, bpm: $0.bpm)
+            bpmHistory: bpmHistory.map { (sample: BPMDataPoint) -> PersistedBPMPoint in
+                return PersistedBPMPoint(timestamp: sample.timestamp, bpm: sample.bpm)
             },
             timerStartDate: timerStartDate,
             totalRestSeconds: totalRestSeconds,
@@ -828,9 +844,12 @@ public final class ActiveWorkoutViewModel {
     /// Picture no se vacíe al volver a abrir la app. El filtro de 3 minutos se
     /// aplica al dibujar, no al restaurar.
     private func restoreBPMHistory(from state: PersistedWorkoutState) {
-        bpmHistory = (state.bpmHistory ?? [])
-            .filter { $0.bpm > 0 }
-            .map { BPMDataPoint(timestamp: $0.timestamp, bpm: $0.bpm) }
+        let persistedPoints: [PersistedBPMPoint] = state.bpmHistory ?? []
+        bpmHistory = persistedPoints.filter { (point: PersistedBPMPoint) -> Bool in
+            return point.bpm > 0
+        }.map { (point: PersistedBPMPoint) -> BPMDataPoint in
+            return BPMDataPoint(timestamp: point.timestamp, bpm: point.bpm)
+        }
     }
 
     /// Vuelve a crear en SwiftData las series completadas que falten. Así los
@@ -849,7 +868,9 @@ public final class ActiveWorkoutViewModel {
                   sets.indices.contains(persisted.setNumber - 1) else { continue }
 
             let index = persisted.setNumber - 1
-            let routineExercise = routine.exercises.first { $0.id == persisted.routineExerciseID }
+            let routineExercise: RoutineExercise? = routine.exercises.first { (re: RoutineExercise) -> Bool in
+                return re.id == persisted.routineExerciseID
+            }
 
             if sets[index].existingLog != nil {
                 sets[index].isCompleted = true
@@ -882,9 +903,12 @@ public final class ActiveWorkoutViewModel {
         }
 
         if didInsertMissingLog {
-            session.totalVolumeKg = session.setsCompleted
-                .filter { $0.isCompleted }
-                .reduce(0) { $0 + $1.weight * Double($1.reps) }
+            let completedLogs: [WorkoutSetLog] = session.setsCompleted.filter { (log: WorkoutSetLog) -> Bool in
+                return log.isCompleted
+            }
+            session.totalVolumeKg = completedLogs.reduce(0) { (total: Double, log: WorkoutSetLog) -> Double in
+                return total + log.weight * Double(log.reps)
+            }
         }
 
         try? modelContext.save()
@@ -921,8 +945,9 @@ public final class ActiveWorkoutViewModel {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let routineName = trimmedName.isEmpty ? "\(routine.name) (modificada)" : trimmedName
 
-        let copiedExercises = routine.exercises
-            .sorted { $0.sortOrder < $1.sortOrder }
+        let copiedExercises = routine.exercises.sorted { (lhs: RoutineExercise, rhs: RoutineExercise) -> Bool in
+            return lhs.sortOrder < rhs.sortOrder
+        }
             .map { routineExercise in
                 RoutineExercise(
                     exercise: routineExercise.exercise,
@@ -1004,12 +1029,16 @@ public final class ActiveWorkoutViewModel {
             return (currentExerciseName, restingSetNumber, restingTotalSets)
         }
 
-        let exercises = routine.exercises.sorted { $0.sortOrder < $1.sortOrder }
+        let exercises = routine.exercises.sorted { (lhs: RoutineExercise, rhs: RoutineExercise) -> Bool in
+            return lhs.sortOrder < rhs.sortOrder
+        }
 
         for routineExercise in exercises {
             guard let sets = activeSets[routineExercise.id], !sets.isEmpty else { continue }
 
-            if let nextSetIndex = sets.firstIndex(where: { !$0.isCompleted }) {
+            if let nextSetIndex: Int = sets.firstIndex(where: { (set: SetInputState) -> Bool in
+                return !set.isCompleted
+            }) {
                 return (
                     routineExercise.exercise?.name ?? "Ejercicio",
                     nextSetIndex + 1,
@@ -1034,13 +1063,17 @@ public final class ActiveWorkoutViewModel {
     // MARK: - Big Picture Mode
 
     private var bigPictureSortedExercises: [RoutineExercise] {
-        routine.exercises.sorted { $0.sortOrder < $1.sortOrder }
+        routine.exercises.sorted { (lhs: RoutineExercise, rhs: RoutineExercise) -> Bool in
+            return lhs.sortOrder < rhs.sortOrder
+        }
     }
 
     public var bigPictureCurrentRoutineExercise: RoutineExercise? {
-        bigPictureSortedExercises.first { routineExercise in
+        bigPictureSortedExercises.first { (routineExercise: RoutineExercise) -> Bool in
             guard let sets = activeSets[routineExercise.id] else { return false }
-            return sets.contains { !$0.isCompleted }
+            return sets.contains { (set: SetInputState) -> Bool in
+                return !set.isCompleted
+            }
         } ?? bigPictureSortedExercises.first
     }
 
@@ -1052,7 +1085,9 @@ public final class ActiveWorkoutViewModel {
     public var bigPictureNextExercise: String {
         let sorted = bigPictureSortedExercises
         guard let current = bigPictureCurrentRoutineExercise,
-              let currentIndex = sorted.firstIndex(where: { $0.id == current.id }),
+              let currentIndex: Int = sorted.firstIndex(where: { (re: RoutineExercise) -> Bool in
+                  return re.id == current.id
+              }),
               currentIndex + 1 < sorted.count,
               let nextExercise = sorted[currentIndex + 1].exercise else { return "" }
         return "SIG: \(nextExercise.name)"
@@ -1065,22 +1100,28 @@ public final class ActiveWorkoutViewModel {
     public var bigPictureCurrentWeight: Double {
         guard let id = bigPictureCurrentExerciseID,
               let sets = activeSets[id],
-              let pending = sets.first(where: { !$0.isCompleted }) else { return 0 }
+              let pending = sets.first(where: { (set: SetInputState) -> Bool in
+                  return !set.isCompleted
+              }) else { return 0 }
         return pending.weight
     }
 
     public var bigPictureCurrentReps: Int {
         guard let id = bigPictureCurrentExerciseID,
               let sets = activeSets[id],
-              let pending = sets.first(where: { !$0.isCompleted }) else { return 0 }
+              let pending = sets.first(where: { (set: SetInputState) -> Bool in
+                  return !set.isCompleted
+              }) else { return 0 }
         return pending.reps
     }
 
     public var bigPictureSetsForCurrentExercise: [WorkoutSetLog] {
         guard let exercise = bigPictureCurrentRoutineExercise?.exercise else { return [] }
-        return session.setsCompleted
-            .filter { $0.exercise?.id == exercise.id && $0.isCompleted }
-            .sorted { $0.date < $1.date }
+        return session.setsCompleted.filter { (log: WorkoutSetLog) -> Bool in
+            return log.exercise?.id == exercise.id && log.isCompleted
+        }.sorted { (lhs: WorkoutSetLog, rhs: WorkoutSetLog) -> Bool in
+            return lhs.date < rhs.date
+        }
     }
 
     /// Filas de la parrilla de series del ejercicio actual en Big Picture.
@@ -1098,7 +1139,9 @@ public final class ActiveWorkoutViewModel {
               let sets = activeSets[id],
               let exercise = bigPictureCurrentRoutineExercise?.exercise else { return [] }
 
-        let currentSets = sets.sorted { $0.setNumber < $1.setNumber }
+        let currentSets = sets.sorted { (lhs: SetInputState, rhs: SetInputState) -> Bool in
+            return lhs.setNumber < rhs.setNumber
+        }
 
         // Última sesión previa para este ejercicio (excluyendo la sesión en curso).
         let sessionID = session.id
@@ -1132,8 +1175,12 @@ public final class ActiveWorkoutViewModel {
 
         var rows: [BigPictureSetRow] = []
         for set in currentSets {
-            let previous = latestSessionLogs.first { $0.setNumber == set.setNumber }
-            let previousText = previous.map { "\(Int($0.weight)) kg · \($0.reps)" }
+            let previous: WorkoutSetLog? = latestSessionLogs.first { (log: WorkoutSetLog) -> Bool in
+                return log.setNumber == set.setNumber
+            }
+            let previousText: String? = previous.map { (log: WorkoutSetLog) -> String in
+                return "\(Int(log.weight)) kg · \(log.reps)"
+            }
 
             let currentText: String?
             if set.isCompleted, let log = set.existingLog {
@@ -1188,7 +1235,9 @@ public final class ActiveWorkoutViewModel {
     public func bigPictureAdjustReps(_ delta: Int) {
         guard let id = bigPictureCurrentExerciseID,
               var sets = activeSets[id],
-              let index = sets.firstIndex(where: { !$0.isCompleted }) else { return }
+              let index = sets.firstIndex(where: { (set: SetInputState) -> Bool in
+                  return !set.isCompleted
+              }) else { return }
         sets[index].reps = max(0, sets[index].reps + delta)
         activeSets[id] = sets
     }
@@ -1196,7 +1245,9 @@ public final class ActiveWorkoutViewModel {
     public func bigPictureRegisterSet(modelContext: ModelContext) {
         guard let id = bigPictureCurrentExerciseID,
               let sets = activeSets[id],
-              let setIndex = sets.firstIndex(where: { !$0.isCompleted }) else { return }
+              let setIndex = sets.firstIndex(where: { (set: SetInputState) -> Bool in
+                  return !set.isCompleted
+              }) else { return }
         toggleSetCompletion(for: id, setIndex: setIndex, modelContext: modelContext)
     }
 
@@ -1238,14 +1289,17 @@ public final class ActiveWorkoutViewModel {
         within window: TimeInterval = 180,
         relativeTo date: Date = Date()
     ) -> [BPMDataPoint] {
-        let cutoff = date.addingTimeInterval(-window)
-        return bpmHistory.filter { $0.timestamp >= cutoff && $0.timestamp <= date }
+        let cutoff: Date = date.addingTimeInterval(-window)
+        return bpmHistory.filter { (sample: BPMDataPoint) -> Bool in
+            return sample.timestamp >= cutoff && sample.timestamp <= date
+        }
     }
 
     private func pruneBPMHistory(relativeTo date: Date) {
-        let cutoff = date.addingTimeInterval(-(bpmHistoryWindow + 5))
-        guard let firstValid = bpmHistory.firstIndex(where: { $0.timestamp >= cutoff }),
-              firstValid > 0 else { return }
+        let cutoff: Date = date.addingTimeInterval(-(bpmHistoryWindow + 5))
+        guard let firstValid: Int = bpmHistory.firstIndex(where: { (sample: BPMDataPoint) -> Bool in
+            return sample.timestamp >= cutoff
+        }), firstValid > 0 else { return }
         bpmHistory.removeFirst(firstValid)
     }
 
