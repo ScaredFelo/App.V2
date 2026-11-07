@@ -92,7 +92,9 @@ public final class ActiveWorkoutViewModel {
 
         let exerciseID = exercise.id
         let descriptor = FetchDescriptor<WorkoutSetLog>(
-            predicate: #Predicate { $0.exercise?.id == exerciseID },
+            predicate: #Predicate { (log: WorkoutSetLog) -> Bool in
+                return log.exercise?.id == exerciseID
+            },
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
 
@@ -100,29 +102,35 @@ public final class ActiveWorkoutViewModel {
 
         // Historial de referencia: solo entrenamientos anteriores (nunca la
         // sesión en curso) y, preferentemente, de esta misma variante de rutina.
-        let sessionID = session.id
-        let previousLogs = allLogs.filter { log in
+        let sessionID: UUID = session.id
+        let previousLogs = allLogs.filter { (log: WorkoutSetLog) -> Bool in
             guard log.isCompleted else { return false }
             guard log.session?.id != sessionID else { return false }
             guard log.date < session.startDate else { return false }
-            guard let logRoutineExerciseID = log.routineExerciseID else { return true }
+            guard let logRoutineExerciseID: UUID = log.routineExerciseID else { return true }
             return logRoutineExerciseID == routineExercise.id
         }
 
         // Para la parrilla de Big Picture solo cuenta la última sesión previa.
         let lastSessionLogs: [WorkoutSetLog]
-        if let latestSessionID = previousLogs.first?.session?.id {
-            lastSessionLogs = previousLogs.filter { $0.session?.id == latestSessionID }
+        if let latestSessionID: UUID = previousLogs.first?.session?.id {
+            lastSessionLogs = previousLogs.filter { (log: WorkoutSetLog) -> Bool in
+                return log.session?.id == latestSessionID
+            }
         } else {
             lastSessionLogs = previousLogs
         }
 
-        let currentLogs = session.setsCompleted.filter {
-            $0.exercise?.id == exerciseID && $0.isCompleted
+        let currentLogs = session.setsCompleted.filter { (log: WorkoutSetLog) -> Bool in
+            return log.exercise?.id == exerciseID && log.isCompleted
         }
         var legacyLogs = currentLogs
-            .filter { $0.routineExerciseID == nil }
-            .sorted { $0.date < $1.date }
+            .filter { (log: WorkoutSetLog) -> Bool in
+                return log.routineExerciseID == nil
+            }
+            .sorted { (lhs: WorkoutSetLog, rhs: WorkoutSetLog) -> Bool in
+                return lhs.date < rhs.date
+            }
         var sets: [SetInputState] = []
 
         for i in 1...max(1, routineExercise.defaultSets) {
@@ -1095,8 +1103,8 @@ public final class ActiveWorkoutViewModel {
         // Última sesión previa para este ejercicio (excluyendo la sesión en curso).
         let sessionID = session.id
         let descriptor = FetchDescriptor<WorkoutSetLog>(
-            predicate: #Predicate { log in
-                log.exercise?.id == exercise.id && log.isCompleted && log.session?.id != sessionID
+            predicate: #Predicate { (log: WorkoutSetLog) -> Bool in
+                return log.exercise?.id == exercise.id && log.isCompleted && log.session?.id != sessionID
             },
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
@@ -1105,11 +1113,19 @@ public final class ActiveWorkoutViewModel {
         // Agrupar por sesión y quedarse con la más reciente.
         // `pastLogs` viene ordenado por fecha descendente, así que el primer
         // log pertenece a la última sesión previa.
-        let latestSessionID = pastLogs.first?.session?.id
+        let latestSessionID: UUID? = pastLogs.first?.session?.id
         let latestSessionLogs: [WorkoutSetLog]
-        if let latestSessionID,
-           let logs = Dictionary(grouping: pastLogs) { $0.session?.id }[latestSessionID] {
-            latestSessionLogs = logs.sorted { ($0.setNumber ?? 0) < ($1.setNumber ?? 0) }
+        if let latestSessionID {
+            let groupedLogs: [UUID?: [WorkoutSetLog]] = Dictionary(grouping: pastLogs) { (log: WorkoutSetLog) -> UUID? in
+                return log.session?.id
+            }
+            if let logs = groupedLogs[latestSessionID] {
+                latestSessionLogs = logs.sorted { (lhs: WorkoutSetLog, rhs: WorkoutSetLog) -> Bool in
+                    return (lhs.setNumber ?? 0) < (rhs.setNumber ?? 0)
+                }
+            } else {
+                latestSessionLogs = []
+            }
         } else {
             latestSessionLogs = []
         }
