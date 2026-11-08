@@ -20,7 +20,7 @@ public struct BigPictureWorkoutView: View {
     @FocusState private var isWeightFieldFocused: Bool
 
     public init(viewModel: ActiveWorkoutViewModel, modelContext: ModelContext, onWorkoutFinished: (() -> Void)? = nil) {
-        self.viewModel = viewModel
+        self._viewModel = ObservedObject(wrappedValue: viewModel)
         self.modelContext = modelContext
         self.onWorkoutFinished = onWorkoutFinished
     }

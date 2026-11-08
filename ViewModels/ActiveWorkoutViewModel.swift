@@ -1,29 +1,29 @@
 import Foundation
 import SwiftData
 import SwiftUI
+import Combine
 
-@Observable
 @MainActor
-public final class ActiveWorkoutViewModel {
-    public var session: WorkoutSession
-    public var routine: Routine
-    public var activeSets: [UUID: [SetInputState]] = [:]
-    public var structureVersion = 0
+public final class ActiveWorkoutViewModel: ObservableObject {
+    @Published public var session: WorkoutSession
+    @Published public var routine: Routine
+    @Published public var activeSets: [UUID: [SetInputState]] = [:]
+    @Published public var structureVersion = 0
 
     // Rest Timer State
-    public var isResting = false
-    public var isRestPaused = false
-    public var restTimeRemaining = 0
-    public var totalRestSeconds = 0
-    public var restTimerEndDate: Date? = nil
-    public var isRestTimerActive: Bool = false
-    public var restTargetBpm: Int?
-    public var currentRestModeTitle = ""
-    public var currentExerciseName = ""
-    public var timerStartDate: Date?
-    public var timerTargetDuration = 0
-    public var isTimerMinimized: Bool = false
-    public var isRestFinishing: Bool = false
+    @Published public var isResting = false
+    @Published public var isRestPaused = false
+    @Published public var restTimeRemaining = 0
+    @Published public var totalRestSeconds = 0
+    @Published public var restTimerEndDate: Date? = nil
+    @Published public var isRestTimerActive: Bool = false
+    @Published public var restTargetBpm: Int?
+    @Published public var currentRestModeTitle = ""
+    @Published public var currentExerciseName = ""
+    @Published public var timerStartDate: Date?
+    @Published public var timerTargetDuration = 0
+    @Published public var isTimerMinimized: Bool = false
+    @Published public var isRestFinishing: Bool = false
 
     /// Callback opcional invocado cuando el entrenamiento finaliza
     /// automáticamente desde el modo Big Picture (última serie del último ejercicio).
@@ -1278,7 +1278,7 @@ public final class ActiveWorkoutViewModel {
         public let bpm: Int
     }
 
-    public var bpmHistory: [BPMDataPoint] = []
+    @Published public var bpmHistory: [BPMDataPoint] = []
     private let bpmHistoryWindow: TimeInterval = 180
     private var lastBPMPersistDate: Date = .distantPast
 

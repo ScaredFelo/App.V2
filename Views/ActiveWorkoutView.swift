@@ -12,7 +12,7 @@ public struct ActiveWorkoutView: View {
     @ObservedObject private var liveActivityManager = LiveActivityManager.shared
     @AppStorage("isBigPictureModeEnabled") private var isBigPictureModeEnabled = false
 
-    @State private var viewModel: ActiveWorkoutViewModel
+    @StateObject private var viewModel: ActiveWorkoutViewModel
     @State private var showingCancelConfirmation = false
     @State private var showingBigPictureCancelConfirmation = false
     @State private var showingRoutineChangeOptions = false
@@ -30,7 +30,7 @@ public struct ActiveWorkoutView: View {
     private let horizontalPadding: CGFloat = 16
 
     public init(session: WorkoutSession, routine: Routine, modelContext: ModelContext) {
-        _viewModel = State(initialValue: ActiveWorkoutViewModel(session: session, routine: routine, modelContext: modelContext))
+        _viewModel = StateObject(wrappedValue: ActiveWorkoutViewModel(session: session, routine: routine, modelContext: modelContext))
     }
 
     public var body: some View {
