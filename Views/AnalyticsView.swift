@@ -65,15 +65,12 @@ public struct AnalyticsView: View {
                     .foregroundStyle(by: .value("Grupo", item.muscleGroup))
                     .cornerRadius(8)
                 }
-                .chartXAxis {
-                    AxisMarks { value in
-                        AxisValueLabel()
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                .chartXAxis(.hidden)
+                .chartLegend(position: .bottom, alignment: .leading, spacing: 8)
                 .chartYAxis {
-                    AxisMarks { value in
+                    AxisMarks(values: .stride(by: 5)) { value in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+                            .foregroundStyle(Color.gray.opacity(0.3))
                         AxisValueLabel()
                             .font(.caption2)
                             .foregroundStyle(.secondary)

@@ -61,7 +61,9 @@ public struct WorkoutSummaryView: View {
 
                 // Botón inferior destacado: Terminar sesión
                 Button {
-                    viewModel.finishWorkout(modelContext: modelContext)
+                    if viewModel.session.endDate == nil {
+                        viewModel.finishWorkout(modelContext: modelContext)
+                    }
                     onFinish?()
                 } label: {
                     Text("Terminar sesión")
@@ -76,6 +78,7 @@ public struct WorkoutSummaryView: View {
                 .padding(.bottom, 32)
             }
         }
+        .interactiveDismissDisabled(true)
     }
 
     private func summaryRow(icon: String, title: String, value: String) -> some View {

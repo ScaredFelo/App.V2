@@ -91,7 +91,16 @@ public struct BigPictureWorkoutView: View {
                 showingSummaryView = true
             }
         }
-        .sheet(isPresented: $showingSummaryView) {
+        // Si la vista se recrea con la sesión ya finalizada, el resumen sigue
+        // siendo obligatorio hasta pulsar "Terminar sesión".
+        .onAppear {
+            if viewModel.session.endDate != nil {
+                showingSummaryView = true
+            }
+        }
+        // Pantalla completa no interactiva: no hay gesto de arrastre ni botón
+        // de cierre. La única salida es el botón "Terminar sesión".
+        .fullScreenCover(isPresented: $showingSummaryView) {
             WorkoutSummaryView(
                 viewModel: viewModel,
                 modelContext: modelContext,
@@ -100,6 +109,7 @@ public struct BigPictureWorkoutView: View {
                     dismiss() // Regresa al menú principal
                 }
             )
+            .interactiveDismissDisabled(true)
         }
     }
 
