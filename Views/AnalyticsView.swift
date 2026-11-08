@@ -120,18 +120,17 @@ public struct AnalyticsView: View {
 
     /// Días del mes actual con su estado de entrenamiento, pre-computados fuera
     /// del ViewBuilder para evitar sentencias no conformes a View.
+    /// Genera el mes completo desde el día 1 hasta el último día (28, 30 o 31).
     private var calendarDays: [(dayNumber: Int, hasWorkout: Bool)] {
-        var calendar = Calendar.current
-        calendar.firstWeekday = 2 // Lunes como primer día
-        let now = Date()
-        let year: Int = calendar.component(.year, from: now)
-        let month: Int = calendar.component(.month, from: now)
-        let daysInMonth: Int = calendar.range(of: .day, in: .month, for: now)?.count ?? 0
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.year, .month], from: Date())
+        guard let startOfMonth = calendar.date(from: components),
+              let range = calendar.range(of: .day, in: .month, for: startOfMonth) else {
+            return []
+        }
 
-        return (1 ... daysInMonth).map { dayNumber in
-            let dayDate: Date = calendar.date(
-                from: DateComponents(year: year, month: month, day: dayNumber)
-            ) ?? now
+        return range.map { dayNumber in
+            let dayDate: Date = calendar.date(byAdding: .day, value: dayNumber - 1, to: startOfMonth) ?? Date()
             let hasWorkout: Bool = sessions.contains { (session: WorkoutSession) -> Bool in
                 calendar.isDate(session.startDate, inSameDayAs: dayDate)
             }
@@ -140,16 +139,14 @@ public struct AnalyticsView: View {
     }
 
     /// Offset de celdas vacías para alinear el primer día del mes en su columna de Lunes.
+    /// Lunes = 0 desfase, Martes = 1, ..., Domingo = 6.
     private var calendarWeekdayOffset: Int {
         var calendar = Calendar.current
         calendar.firstWeekday = 2
-        let now = Date()
-        let year = calendar.component(.year, from: now)
-        let month = calendar.component(.month, from: now)
-        let firstOfMonth = calendar.date(
-            from: DateComponents(year: year, month: month, day: 1)
-        ) ?? now
-        let firstWeekday = calendar.component(.weekday, from: firstOfMonth)
+        let components = calendar.dateComponents([.year, .month], from: Date())
+        guard let startOfMonth = calendar.date(from: components) else { return 0 }
+
+        let firstWeekday = calendar.component(.weekday, from: startOfMonth)
         return (firstWeekday - 2 + 7) % 7
     }
 
