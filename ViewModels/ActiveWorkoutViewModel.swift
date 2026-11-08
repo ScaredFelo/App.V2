@@ -25,6 +25,10 @@ public final class ActiveWorkoutViewModel {
     public var isTimerMinimized: Bool = false
     public var isRestFinishing: Bool = false
 
+    /// Callback opcional invocado cuando el entrenamiento finaliza
+    /// automáticamente desde el modo Big Picture (última serie del último ejercicio).
+    public var onWorkoutFinished: (() -> Void)? = nil
+
     public var hasActiveRestTimer: Bool {
         guard let endDate = restTimerEndDate else { return false }
         return endDate > Date()
@@ -1248,7 +1252,22 @@ public final class ActiveWorkoutViewModel {
               let setIndex = sets.firstIndex(where: { (set: SetInputState) -> Bool in
                   return !set.isCompleted
               }) else { return }
+
         toggleSetCompletion(for: id, setIndex: setIndex, modelContext: modelContext)
+
+        // Guardado automático: si acabamos de completar la última serie del
+        // último ejercicio de la rutina, finaliza el entrenamiento de forma limpia.
+        let updatedSets = activeSets[id] ?? []
+        let isLastExercise: Bool = bigPictureSortedExercises.last?.id == id
+        let isLastSet: Bool = setIndex == updatedSets.count - 1
+        let allSetsCompleted: Bool = updatedSets.allSatisfy { (set: SetInputState) -> Bool in
+            return set.isCompleted
+        }
+
+        if isLastExercise && isLastSet && allSetsCompleted {
+            finishWorkout(modelContext: modelContext)
+            onWorkoutFinished?()
+        }
     }
 
     // MARK: - BPM History (Big Picture chart)
