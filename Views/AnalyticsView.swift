@@ -118,6 +118,46 @@ public struct AnalyticsView: View {
 
     // MARK: - Monthly Workout Calendar
 
+    /// Días del mes actual con su estado de entrenamiento, pre-computados fuera
+    /// del ViewBuilder para evitar sentencias no conformes a View.
+    private var calendarDays: [(dayNumber: Int, hasWorkout: Bool)] {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2 // Lunes como primer día
+        let now = Date()
+        let year: Int = calendar.component(.year, from: now)
+        let month: Int = calendar.component(.month, from: now)
+        let daysInMonth: Int = calendar.range(of: .day, in: .month, for: now)?.count ?? 0
+
+        return (1 ... daysInMonth).map { dayNumber in
+            let dayDate: Date = calendar.date(
+                from: DateComponents(year: year, month: month, day: dayNumber)
+            ) ?? now
+            let hasWorkout: Bool = sessions.contains { (session: WorkoutSession) -> Bool in
+                calendar.isDate(session.startDate, inSameDayAs: dayDate)
+            }
+            return (dayNumber: dayNumber, hasWorkout: hasWorkout)
+        }
+    }
+
+    /// Offset de celdas vacías para alinear el primer día del mes en su columna de Lunes.
+    private var calendarWeekdayOffset: Int {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2
+        let now = Date()
+        let year = calendar.component(.year, from: now)
+        let month = calendar.component(.month, from: now)
+        let firstOfMonth = calendar.date(
+            from: DateComponents(year: year, month: month, day: 1)
+        ) ?? now
+        let firstWeekday = calendar.component(.weekday, from: firstOfMonth)
+        return (firstWeekday - 2 + 7) % 7
+    }
+
+    /// Símbolos de los días de la semana, empezando en Lunes.
+    private var calendarWeekdaySymbols: [String] {
+        ["L", "M", "X", "J", "V", "S", "D"]
+    }
+
     /// Calendario mensual con los días del mes actual. Los días en los que se
     /// inició una rutina (`startDate`) se resaltan con un borde circular verde.
     /// La fecha de referencia es exclusivamente `startDate` de cada sesión.
@@ -127,28 +167,13 @@ public struct AnalyticsView: View {
                 .font(.headline)
                 .foregroundStyle(.white)
 
-            var calendar: Calendar = Calendar.current
-            calendar.firstWeekday = 2 // 1 = Domingo, 2 = Lunes
-            let now: Date = Date()
-            let year: Int = calendar.component(.year, from: now)
-            let month: Int = calendar.component(.month, from: now)
-            let daysInMonth: Int = calendar.range(of: .day, in: .month, for: now)?.count ?? 0
-            let firstOfMonth: Date = calendar.date(
-                from: DateComponents(year: year, month: month, day: 1)
-            ) ?? now
-            let firstWeekday: Int = calendar.component(.weekday, from: firstOfMonth)
-            // Con firstWeekday = 2 (Lunes): 1=Domingo, 2=Lunes, ..., 7=Sábado.
-            // Offset de celdas vacías para alinear el primer día del mes en su columna de Lunes.
-            let weekdayOffset: Int = (firstWeekday - 2 + 7) % 7
-            let weekdaySymbols: [String] = ["L", "M", "X", "J", "V", "S", "D"]
-
             VStack(spacing: 8) {
                 // Encabezado de días de la semana (7 columnas)
                 LazyVGrid(
                     columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7),
                     spacing: 4
                 ) {
-                    ForEach(weekdaySymbols, id: \.self) { symbol in
+                    ForEach(calendarWeekdaySymbols, id: \.self) { symbol in
                         Text(symbol)
                             .font(.caption2.bold())
                             .foregroundStyle(.secondary)
@@ -156,39 +181,24 @@ public struct AnalyticsView: View {
                     }
                 }
 
-                // Días del mes
+                // Días del mes (pre-computados fuera del ViewBuilder para evitar
+                // sentencias no conformes a View dentro de @ViewBuilder).
                 LazyVGrid(
                     columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7),
                     spacing: 4
                 ) {
                     // Celdas vacías antes del primer día del mes (alineado a Lunes)
-                    ForEach(0 ..< weekdayOffset, id: \.self) { _ in
+                    ForEach(0 ..< calendarWeekdayOffset, id: \.self) { _ in
                         Color.clear
                             .frame(maxWidth: .infinity)
                     }
 
                     // Días numerados del mes actual
-                    ForEach(1 ... daysInMonth, id: \.self) { day in
-                        let dayDate: Date = calendar.date(
-                            from: DateComponents(year: year, month: month, day: day)
-                        ) ?? now
-                        let hasWorkout: Bool = sessions.contains { (session: WorkoutSession) -> Bool in
-                            calendar.isDate(session.startDate, inSameDayAs: dayDate)
-                        }
-
-                        ZStack {
-                            Text("\(day)")
-                                .font(.caption.bold())
-                                .foregroundStyle(hasWorkout ? Color.green : Color.white)
-                                .frame(maxWidth: .infinity)
-
-                            if hasWorkout {
-                                Circle()
-                                    .stroke(Color.green, lineWidth: 2)
-                                    .padding(2)
-                            }
-                        }
-                        .frame(height: 32)
+                    ForEach(calendarDays, id: \.dayNumber) { dayInfo in
+                        CalendarDayView(
+                            dayNumber: dayInfo.dayNumber,
+                            hasWorkout: dayInfo.hasWorkout
+                        )
                     }
                 }
             }
@@ -285,3 +295,27 @@ public struct AnalyticsView: View {
         }
     }
 }
+
+// MARK: - CalendarDayView (vista auxiliar para un día del calendario mensual)
+
+struct CalendarDayView: View {
+    let dayNumber: Int
+    let hasWorkout: Bool
+
+    var body: some View {
+        ZStack {
+            Text("\(dayNumber)")
+                .font(.caption.bold())
+                .foregroundStyle(hasWorkout ? Color.green : Color.white)
+                .frame(maxWidth: .infinity)
+
+            if hasWorkout {
+                Circle()
+                    .stroke(Color.green, lineWidth: 2)
+                    .padding(2)
+            }
+        }
+        .frame(height: 32)
+    }
+}
+
