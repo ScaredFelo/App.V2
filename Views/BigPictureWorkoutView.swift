@@ -19,6 +19,7 @@ public struct BigPictureWorkoutView: View {
     @State private var weightInput = ""
     @FocusState private var isWeightFieldFocused: Bool
     @State private var showingCancelConfirmation = false
+    @State private var showingSummaryView = false
 
     public init(viewModel: ActiveWorkoutViewModel, modelContext: ModelContext, onWorkoutFinished: (() -> Void)? = nil) {
         self._viewModel = ObservedObject(wrappedValue: viewModel)
@@ -83,6 +84,22 @@ public struct BigPictureWorkoutView: View {
             Button("Seguir entrenando", role: .cancel) {}
         } message: {
             Text("Se perderán todos los registros de esta sesión.")
+        }
+        // Cuando finishWorkout() establece session.endDate, se muestra la pantalla de resumen.
+        .onChange(of: viewModel.session.endDate) { _, endDate in
+            if endDate != nil {
+                showingSummaryView = true
+            }
+        }
+        .sheet(isPresented: $showingSummaryView) {
+            WorkoutSummaryView(
+                viewModel: viewModel,
+                modelContext: modelContext,
+                onFinish: {
+                    showingSummaryView = false
+                    dismiss() // Regresa al menú principal
+                }
+            )
         }
     }
 

@@ -29,6 +29,34 @@ public final class ActiveWorkoutViewModel: ObservableObject {
     /// automáticamente desde el modo Big Picture (última serie del último ejercicio).
     public var onWorkoutFinished: (() -> Void)? = nil
 
+    // MARK: - Datos de resumen de sesión
+
+    /// Tiempo total transcurrido desde el inicio del entrenamiento hasta ahora
+    /// (o hasta session.endDate si ya finalizó).
+    public var totalWorkoutDuration: TimeInterval {
+        let end = session.endDate ?? Date()
+        return end.timeIntervalSince(session.startDate)
+    }
+
+    /// Tiempo total formateado como HH:mm:ss, o "X min" si es menor a una hora.
+    public var totalWorkoutDurationFormatted: String {
+        let totalSeconds = Int(totalWorkoutDuration)
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+        if hours > 0 {
+            return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+        }
+        return String(format: "%d min", minutes)
+    }
+
+    /// Promedio de pulsaciones (BPM) durante el entrenamiento.
+    public var averageBPM: Int {
+        guard !bpmHistory.isEmpty else { return 0 }
+        let sum = bpmHistory.reduce(0) { $0 + $1.bpm }
+        return sum / bpmHistory.count
+    }
+
     public var hasActiveRestTimer: Bool {
         guard let endDate = restTimerEndDate else { return false }
         return endDate > Date()
