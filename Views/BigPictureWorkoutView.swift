@@ -18,6 +18,7 @@ public struct BigPictureWorkoutView: View {
 
     @State private var weightInput = ""
     @FocusState private var isWeightFieldFocused: Bool
+    @State private var showingCancelConfirmation = false
 
     public init(viewModel: ActiveWorkoutViewModel, modelContext: ModelContext, onWorkoutFinished: (() -> Void)? = nil) {
         self._viewModel = ObservedObject(wrappedValue: viewModel)
@@ -74,6 +75,15 @@ public struct BigPictureWorkoutView: View {
                 .padding(.bottom, 16)
             }
         }
+        .alert("¿Descartar entrenamiento?", isPresented: $showingCancelConfirmation) {
+            Button("Sí, descartar", role: .destructive) {
+                viewModel.cancelWorkout(modelContext: modelContext)
+                dismiss()
+            }
+            Button("Seguir entrenando", role: .cancel) {}
+        } message: {
+            Text("Se perderán todos los registros de esta sesión.")
+        }
     }
 
     // MARK: - Cabecera y barra superior
@@ -83,7 +93,7 @@ public struct BigPictureWorkoutView: View {
     private var bigPictureTopBar: some View {
         HStack {
             Button {
-                dismiss()
+                showingCancelConfirmation = true
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title2)

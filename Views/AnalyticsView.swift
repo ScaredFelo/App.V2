@@ -127,7 +127,8 @@ public struct AnalyticsView: View {
                 .font(.headline)
                 .foregroundStyle(.white)
 
-            let calendar: Calendar = Calendar.current
+            var calendar: Calendar = Calendar.current
+            calendar.firstWeekday = 2 // 1 = Domingo, 2 = Lunes
             let now: Date = Date()
             let year: Int = calendar.component(.year, from: now)
             let month: Int = calendar.component(.month, from: now)
@@ -136,6 +137,10 @@ public struct AnalyticsView: View {
                 from: DateComponents(year: year, month: month, day: 1)
             ) ?? now
             let firstWeekday: Int = calendar.component(.weekday, from: firstOfMonth)
+            // Con firstWeekday = 2 (Lunes): 1=Domingo, 2=Lunes, ..., 7=Sábado.
+            // Offset de celdas vacías para alinear el primer día del mes en su columna de Lunes.
+            let weekdayOffset: Int = (firstWeekday - 2 + 7) % 7
+            let weekdaySymbols: [String] = ["L", "M", "X", "J", "V", "S", "D"]
 
             VStack(spacing: 8) {
                 // Encabezado de días de la semana (7 columnas)
@@ -143,8 +148,8 @@ public struct AnalyticsView: View {
                     columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7),
                     spacing: 4
                 ) {
-                    ForEach(calendar.shortWeekdaySymbols, id: \.self) { weekdaySymbol in
-                        Text(weekdaySymbol)
+                    ForEach(weekdaySymbols, id: \.self) { symbol in
+                        Text(symbol)
                             .font(.caption2.bold())
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity)
@@ -156,8 +161,8 @@ public struct AnalyticsView: View {
                     columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7),
                     spacing: 4
                 ) {
-                    // Celdas vacías antes del primer día del mes
-                    ForEach(0 ..< (firstWeekday - 1), id: \.self) { _ in
+                    // Celdas vacías antes del primer día del mes (alineado a Lunes)
+                    ForEach(0 ..< weekdayOffset, id: \.self) { _ in
                         Color.clear
                             .frame(maxWidth: .infinity)
                     }

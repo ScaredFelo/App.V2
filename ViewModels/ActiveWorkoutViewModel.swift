@@ -1255,16 +1255,23 @@ public final class ActiveWorkoutViewModel: ObservableObject {
 
         toggleSetCompletion(for: id, setIndex: setIndex, modelContext: modelContext)
 
-        // Guardado automático: si acabamos de completar la última serie del
-        // último ejercicio de la rutina, finaliza el entrenamiento de forma limpia.
-        let updatedSets = activeSets[id] ?? []
+        // Guardado automático: solo cuando TODAS las series de TODOS los ejercicios
+        // de la rutina están completadas, y el usuario acaba de completar la última
+        // serie del último ejercicio, se invoca finishWorkout().
         let isLastExercise: Bool = bigPictureSortedExercises.last?.id == id
+        let updatedSets = activeSets[id] ?? []
         let isLastSet: Bool = setIndex == updatedSets.count - 1
-        let allSetsCompleted: Bool = updatedSets.allSatisfy { (set: SetInputState) -> Bool in
-            return set.isCompleted
+
+        guard isLastExercise && isLastSet else { return }
+
+        let allExercisesCompleted: Bool = bigPictureSortedExercises.allSatisfy { (routineExercise: RoutineExercise) -> Bool in
+            guard let exerciseSets = activeSets[routineExercise.id] else { return false }
+            return !exerciseSets.isEmpty && exerciseSets.allSatisfy { (set: SetInputState) -> Bool in
+                return set.isCompleted
+            }
         }
 
-        if isLastExercise && isLastSet && allSetsCompleted {
+        if allExercisesCompleted {
             finishWorkout(modelContext: modelContext)
             onWorkoutFinished?()
         }
